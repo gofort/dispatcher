@@ -1,0 +1,11 @@
+{
+	"ImportPath": "github.com/gofort/dispatcher",
+	"GoVersion": "go1.7",
+	"GodepVersion": "v75",
+	"Deps": [
+		{
+			"ImportPath": "github.com/streadway/amqp",
+			"Rev": "3d520d05b74cc137bfac4ee6cd40d52cda7810ee"
+		}
+	]
+}

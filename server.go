@@ -1,8 +1,11 @@
 package project_1
 
 import (
-	"src/github.com/streadway/amqp"
+	"github.com/streadway/amqp"
+	"encoding/json"
 )
+
+
 
 type Server struct {
 	Connection *amqp.Connection
@@ -13,6 +16,10 @@ type Server struct {
 type Worker struct {
 	Channel *amqp.Channel
 	Queue *amqp.Queue
+}
+
+type Publisher struct {
+	Channel *amqp.Channel
 }
 
 func (s *Server) NewWorker(cfg *WorkerConfig) (*Worker, error) {
@@ -68,4 +75,29 @@ func (s *Server) NewWorker(cfg *WorkerConfig) (*Worker, error) {
 
 	return worker, nil
 
+}
+
+func (s *Publisher) Publish(task *Task, exchange string) error {
+	
+	if exchange == "" {
+		// TODO Get from config
+	}
+	
+	msg, err := json.Marshal(task)
+	if err != nil {
+		return err
+	}
+	
+	// TODO Get task's routing key from config if it is empty
+	
+	err = s.Channel.Publish(exchange, task.RoutingKey, false, false, amqp.Publishing{
+		Headers:      amqp.Table(task.Headers),
+		ContentType:  "application/json",
+		Body:         msg,
+		DeliveryMode: amqp.Persistent,
+	})
+	if err != nil {
+		return err
+	}
+	
 }
