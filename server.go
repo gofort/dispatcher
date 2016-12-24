@@ -1,103 +1,144 @@
 package project_1
 
 import (
+	"crypto/tls"
 	"github.com/streadway/amqp"
-	"encoding/json"
+	"strings"
+	"sync"
+	"time"
 )
 
-
+type ServerConfig struct {
+	AMQPConnectionString        string
+	ReconnectionRetries         int // TODO If 0 - close all workers immediately (every worker should have chan)
+	ReconnectionIntervalSeconds int64
+	TLSConfig                   *tls.Config
+	SecureConnection            bool
+	DebugMode                   bool // for default logger only
+	PublishSettings             struct {
+		DefaultExchange   string
+		DefaultRoutingKey string
+	}
+}
 
 type Server struct {
+	con             *AMQPConnection
+	log             Log
+	Workers         map[string]Worker // TODO When reconnected - reinit all workers
+	publishSettings struct {
+		defaultExchange   string
+		defaultRoutingKey string
+	}
+}
+
+type AMQPConnection struct {
 	Connection *amqp.Connection
-	Log        Log
-	Workers    map[string]Worker // TODO When connection lost - reconnect all workers
+	Close      chan bool
+	mtx        sync.Mutex
+	Connected  bool
 }
 
-type Worker struct {
-	Channel *amqp.Channel
-	Queue *amqp.Queue
-}
+func NewServer(cfg *ServerConfig) (*Server, error) {
 
-type Publisher struct {
-	Channel *amqp.Channel
-}
+	srv := new(Server)
 
-func (s *Server) NewWorker(cfg *WorkerConfig) (*Worker, error) {
+	srv.log = log.InitLogger(cfg.DebugMode)
 
-	worker := new(Worker)
+	srv.con = new(AMQPConnection)
+	go srv.con.initConnection(srv.log, cfg)
 
-	ch, err := s.Connection.Channel()
+	con, err := connectToAMQP(cfg.AMQPConnectionString, cfg.SecureConnection, cfg.TLSConfig)
 	if err != nil {
-		s.Log.Errorf("Error during creating channel: %s", err)
+		srv.log.Error(err)
 		return nil, err
 	}
 
-	if err = ch.ExchangeDeclare(
-		cfg.Exchange,     // name of the exchange
-		cfg.ExchangeType, // type
-		true,             // durable
-		false,            // delete when complete
-		false,            // internal
-		false,            // noWait
-		nil,              // arguments
-	); err != nil {
-		s.Log.Errorf("Error during declaring exchange: %s", err)
-		return nil, err
-	}
-
-	// Declare a queue
-	queue, err := ch.QueueDeclare(
-		cfg.DefaultQueue, // name
-		true,             // durable
-		false,            // delete when unused
-		false,            // exclusive
-		false,            // no-wait
-		nil,              // arguments
-	)
-	if err != nil {
-		s.Log.Errorf("Error during declaring queue: %s", err)
-		return nil, err
-	}
-
-	if err := ch.QueueBind(
-		queue.Name,     // name of the queue
-		cfg.BindingKey, // binding key
-		cfg.Exchange,   // source exchange
-		false,          // noWait
-		amqp.Table(map[string]interface{}{}), // TODO arguments, not implemented
-	); err != nil {
-		s.Log.Errorf("Error during binding queue: %s", err)
-		return nil, err
-	}
-
-	worker.Queue = &queue
-	worker.Channel = ch
-
-	return worker, nil
+	notifyClose := make(chan *amqp.Error)
+	con.NotifyClose(notifyClose)
 
 }
 
-func (s *Publisher) Publish(task *Task, exchange string) error {
-	
-	if exchange == "" {
-		// TODO Get from config
+func (s *Server) SetLogger(logger Log) {
+	s.log = logger
+}
+
+func (s *AMQPConnection) initConnection(log Log, cfg *ServerConfig, notifyConnected chan bool, startGlobalShutoff chan bool, workersFinished chan bool) {
+
+	counter := 0
+
+	for {
+
+		if counter == cfg.ReconnectionRetries+1 {
+			startGlobalShutoff <- true
+			return
+		}
+
+		con, err := connectToAMQP(cfg.AMQPConnectionString, cfg.SecureConnection, cfg.TLSConfig)
+		if err != nil {
+			log.Error(err)
+			counter++
+			time.Sleep(time.Duration(cfg.ReconnectionIntervalSeconds) * time.Second)
+			continue
+		}
+
+		// TODO Create exchange if not exists
+
+		counter = 0
+
+		notifyConnected <- true
+
+		s.Connected = true
+
+		notifyClose := make(chan *amqp.Error)
+		con.NotifyClose(notifyClose)
+
+		select {
+		case <-notifyClose:
+
+			// TODO Pause workers
+
+			s.Connected = false
+
+		case <-s.Close:
+
+			// Start workers closing operation
+			startGlobalShutoff <- true
+
+			// When all workers are finished - close connection
+			<-workersFinished
+
+			if err := s.Connection.Close(); err != nil {
+				log.Error(err)
+			}
+
+			s.Connected = false
+
+			return
+
+		}
+
 	}
-	
-	msg, err := json.Marshal(task)
-	if err != nil {
-		return err
+
+}
+
+func connectToAMQP(url string, secure bool, tlscfg *tls.Config) (*amqp.Connection, error) {
+
+	if secure || tlscfg != nil || strings.HasPrefix(url, "amqps://") {
+
+		if tlscfg == nil {
+
+			tlscfg = &tls.Config{
+				InsecureSkipVerify: true,
+			}
+
+		}
+
+		url = strings.Replace(url, "amqp://", "amqps://", 1)
+
+		return amqp.DialTLS(url, tlscfg)
+
 	}
-	
-	// TODO Get task's routing key from config if it is empty
-	
-	err = s.Channel.Publish(exchange, task.RoutingKey, false, false, amqp.Publishing{
-		Headers:      amqp.Table(task.Headers),
-		ContentType:  "application/json",
-		Body:         msg,
-		DeliveryMode: amqp.Persistent,
-	})
-	if err != nil {
-		return err
-	}
-	
+
+	return amqp.Dial(url)
+
 }

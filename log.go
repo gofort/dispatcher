@@ -10,7 +10,4 @@ type Log interface {
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
 	Errorln(args ...interface{})
-	Fatal(args ...interface{})
-	Fatalf(format string, args ...interface{})
-	Fatalln(args ...interface{})
 }

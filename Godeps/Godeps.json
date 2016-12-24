@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/gofort/dispatcher",
-	"GoVersion": "go1.7",
+	"GoVersion": "go1.6",
 	"GodepVersion": "v75",
 	"Deps": [
 		{
