@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"github.com/gofort/dispatcher/log"
 )
 
 type ServerConfig struct {
@@ -38,23 +39,38 @@ type AMQPConnection struct {
 	Connected  bool
 }
 
-func NewServer(cfg *ServerConfig) (*Server, error) {
+func NewServer(cfg *ServerConfig) *Server {
 
 	srv := new(Server)
 
 	srv.log = log.InitLogger(cfg.DebugMode)
 
 	srv.con = new(AMQPConnection)
-	go srv.con.initConnection(srv.log, cfg)
 
-	con, err := connectToAMQP(cfg.AMQPConnectionString, cfg.SecureConnection, cfg.TLSConfig)
-	if err != nil {
-		srv.log.Error(err)
-		return nil, err
-	}
+	notifyConnected := make(chan bool)
+	startGlobalShutoff := make(chan bool)
+	workersFinished := make(chan bool)
 
-	notifyClose := make(chan *amqp.Error)
-	con.NotifyClose(notifyClose)
+	go srv.con.initConnection(srv.log, cfg, notifyConnected, startGlobalShutoff, workersFinished)
+
+	// TODO After this reconnection wil not work because there are no other receivers for this chan, except cap below
+	<- notifyConnected
+
+	// Cap for channels
+	go func (){
+		for {
+			select {
+			case <- notifyConnected:
+				srv.log.Info("Notify connected chan")
+			case <- startGlobalShutoff:
+				srv.log.Info("Start global shutoff chan")
+			}
+		}
+	}()
+
+	srv.log.Info("Connected to AMQP")
+
+	return srv
 
 }
 
@@ -80,8 +96,6 @@ func (s *AMQPConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 			time.Sleep(time.Duration(cfg.ReconnectionIntervalSeconds) * time.Second)
 			continue
 		}
-
-		// TODO Create exchange if not exists
 
 		counter = 0
 

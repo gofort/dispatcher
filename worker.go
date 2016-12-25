@@ -26,7 +26,7 @@ func (s *Server) NewWorker(cfg *WorkerConfig) (*Worker, error) {
 
 	worker := new(Worker)
 
-	ch, err := s.con.Channel()
+	ch, err := s.con.Connection.Channel()
 	if err != nil {
 		s.log.Errorf("Error during creating channel: %s", err)
 		return nil, err
