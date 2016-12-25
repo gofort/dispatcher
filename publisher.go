@@ -1,8 +1,9 @@
-package project_1
+package dispatcher
 
 import (
 	"encoding/json"
 	"errors"
+	"github.com/satori/go.uuid"
 	"github.com/streadway/amqp"
 )
 
@@ -59,6 +60,15 @@ func (s *Server) PublishDefault(task *Task) error {
 }
 
 func (s *Server) publishTask(task *Task) error {
+
+	if task.UUID == "" {
+		task.UUID = uuid.NewV4().String()
+	}
+
+	if task.Name == "" {
+		return errors.New("Task name was not passed")
+	}
+
 	msg, err := json.Marshal(task)
 	if err != nil {
 		return err

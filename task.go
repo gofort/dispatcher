@@ -1,4 +1,4 @@
-package project_1
+package dispatcher
 
 // Arguments types:
 // bool

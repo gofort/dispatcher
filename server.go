@@ -1,12 +1,13 @@
-package project_1
+package dispatcher
 
 import (
 	"crypto/tls"
+	"errors"
+	"github.com/gofort/dispatcher/log"
 	"github.com/streadway/amqp"
 	"strings"
 	"sync"
 	"time"
-	"github.com/gofort/dispatcher/log"
 )
 
 type ServerConfig struct {
@@ -16,23 +17,36 @@ type ServerConfig struct {
 	TLSConfig                   *tls.Config
 	SecureConnection            bool
 	DebugMode                   bool // for default logger only
-	PublishSettings             struct {
-		DefaultExchange   string
-		DefaultRoutingKey string
+	InitExchanges               []Exchange
+	DefaultPublishSettings      struct {
+		Exchange   string
+		RoutingKey string
 	}
 }
 
+type Exchange struct {
+	Name   string
+	Queues []Queue
+}
+
+type Queue struct {
+	Name        string
+	BindingKeys []string
+}
+
 type Server struct {
-	con             *AMQPConnection
+	con             *amqpConnection
+	ch              *amqp.Channel
 	log             Log
-	Workers         map[string]Worker // TODO When reconnected - reinit all workers
+	workers         map[string]*Worker // TODO When reconnected - reinit all workers
 	publishSettings struct {
 		defaultExchange   string
 		defaultRoutingKey string
 	}
+	// TODO Maybe server should have one channel for publishing instead of opening new
 }
 
-type AMQPConnection struct {
+type amqpConnection struct {
 	Connection *amqp.Connection
 	Close      chan bool
 	mtx        sync.Mutex
@@ -43,9 +57,12 @@ func NewServer(cfg *ServerConfig) *Server {
 
 	srv := new(Server)
 
+	srv.publishSettings.defaultExchange = cfg.DefaultPublishSettings.Exchange
+	srv.publishSettings.defaultRoutingKey = cfg.DefaultPublishSettings.RoutingKey
+
 	srv.log = log.InitLogger(cfg.DebugMode)
 
-	srv.con = new(AMQPConnection)
+	srv.con = new(amqpConnection)
 
 	notifyConnected := make(chan bool)
 	startGlobalShutoff := make(chan bool)
@@ -54,21 +71,72 @@ func NewServer(cfg *ServerConfig) *Server {
 	go srv.con.initConnection(srv.log, cfg, notifyConnected, startGlobalShutoff, workersFinished)
 
 	// TODO After this reconnection wil not work because there are no other receivers for this chan, except cap below
-	<- notifyConnected
+	<-notifyConnected
 
 	// Cap for channels
-	go func (){
+	go func() {
 		for {
 			select {
-			case <- notifyConnected:
+			case <-notifyConnected:
 				srv.log.Info("Notify connected chan")
-			case <- startGlobalShutoff:
+			case <-startGlobalShutoff:
 				srv.log.Info("Start global shutoff chan")
 			}
 		}
 	}()
 
 	srv.log.Info("Connected to AMQP")
+
+	ch, err := srv.con.Connection.Channel()
+	if err != nil {
+		srv.log.Error(err)
+		return srv
+	}
+	defer ch.Close()
+
+	for _, e := range cfg.InitExchanges {
+
+		if e.Name == "" {
+			continue
+		}
+
+		err = declareExchange(ch, e.Name)
+		if err != nil {
+			srv.log.Error(err)
+			continue
+		}
+
+		for _, q := range e.Queues {
+
+			if q.Name == "" {
+				continue
+			}
+
+			err = declareQueue(ch, q.Name)
+			if err != nil {
+				srv.log.Error(err)
+				continue
+			}
+
+			for _, bk := range q.BindingKeys {
+
+				if bk == "" {
+					continue
+				}
+
+				err = queueBind(ch, e.Name, q.Name, bk)
+				if err != nil {
+					srv.log.Error(err)
+					continue
+				}
+
+			}
+
+		}
+
+	}
+
+	srv.log.Info("Exchanges, queues and binding keys added")
 
 	return srv
 
@@ -78,7 +146,18 @@ func (s *Server) SetLogger(logger Log) {
 	s.log = logger
 }
 
-func (s *AMQPConnection) initConnection(log Log, cfg *ServerConfig, notifyConnected chan bool, startGlobalShutoff chan bool, workersFinished chan bool) {
+func (s *Server) GetWorkerByName(name string) (*Worker, error) {
+
+	worker, ok := s.workers[name]
+	if !ok {
+		return nil, errors.New("Worker not found")
+	}
+
+	return worker, nil
+
+}
+
+func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnected chan bool, startGlobalShutoff chan bool, workersFinished chan bool) {
 
 	counter := 0
 
@@ -97,6 +176,8 @@ func (s *AMQPConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 			continue
 		}
 
+		s.Connection = con
+
 		counter = 0
 
 		notifyConnected <- true
@@ -104,7 +185,7 @@ func (s *AMQPConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 		s.Connected = true
 
 		notifyClose := make(chan *amqp.Error)
-		con.NotifyClose(notifyClose)
+		s.Connection.NotifyClose(notifyClose)
 
 		select {
 		case <-notifyClose:

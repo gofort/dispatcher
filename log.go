@@ -1,4 +1,4 @@
-package project_1
+package dispatcher
 
 type Log interface {
 	Info(args ...interface{})
