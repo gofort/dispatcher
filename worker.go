@@ -32,6 +32,8 @@ type Worker struct {
 
 func (s *Server) NewWorker(cfg *WorkerConfig) (*Worker, error) {
 
+	// TODO When register new tasks function check their format func (any args of needed types) (result interface{}, err error)
+
 	worker := new(Worker)
 
 	ch, err := s.con.Connection.Channel()
