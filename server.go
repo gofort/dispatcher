@@ -18,10 +18,12 @@ type ServerConfig struct {
 	SecureConnection            bool
 	DebugMode                   bool // for default logger only
 	InitExchanges               []Exchange
-	DefaultPublishSettings      struct {
-		Exchange   string
-		RoutingKey string
-	}
+	DefaultPublishSettings      PublishSettings
+}
+
+type PublishSettings struct {
+	Exchange   string
+	RoutingKey string
 }
 
 type Exchange struct {
@@ -36,13 +38,14 @@ type Queue struct {
 
 type Server struct {
 	con             *amqpConnection
-	ch              *amqp.Channel
 	log             Log
 	workers         map[string]*Worker // TODO When reconnected - reinit all workers
 	publishSettings struct {
 		defaultExchange   string
 		defaultRoutingKey string
 	}
+	confirmationChan chan amqp.Confirmation
+	publishChannel   *amqp.Channel
 	// TODO Maybe server should have one channel for publishing instead of opening new
 }
 
@@ -79,6 +82,9 @@ func NewServer(cfg *ServerConfig) *Server {
 			select {
 			case <-notifyConnected:
 				srv.log.Info("Notify connected chan")
+
+				srv.initPublishChannel()
+
 			case <-startGlobalShutoff:
 				srv.log.Info("Start global shutoff chan")
 			}
@@ -87,12 +93,11 @@ func NewServer(cfg *ServerConfig) *Server {
 
 	srv.log.Info("Connected to AMQP")
 
-	ch, err := srv.con.Connection.Channel()
+	err := srv.initPublishChannel()
 	if err != nil {
-		srv.log.Error(err)
-		return srv
+		// TODO Handle error
+		return nil
 	}
-	defer ch.Close()
 
 	for _, e := range cfg.InitExchanges {
 
@@ -100,7 +105,7 @@ func NewServer(cfg *ServerConfig) *Server {
 			continue
 		}
 
-		err = declareExchange(ch, e.Name)
+		err = declareExchange(srv.publishChannel, e.Name)
 		if err != nil {
 			srv.log.Error(err)
 			continue
@@ -112,7 +117,7 @@ func NewServer(cfg *ServerConfig) *Server {
 				continue
 			}
 
-			err = declareQueue(ch, q.Name)
+			err = declareQueue(srv.publishChannel, q.Name)
 			if err != nil {
 				srv.log.Error(err)
 				continue
@@ -124,7 +129,7 @@ func NewServer(cfg *ServerConfig) *Server {
 					continue
 				}
 
-				err = queueBind(ch, e.Name, q.Name, bk)
+				err = queueBind(srv.publishChannel, e.Name, q.Name, bk)
 				if err != nil {
 					srv.log.Error(err)
 					continue
@@ -139,6 +144,26 @@ func NewServer(cfg *ServerConfig) *Server {
 	srv.log.Info("Exchanges, queues and binding keys added")
 
 	return srv
+
+}
+
+func (srv *Server) initPublishChannel() error {
+
+	ch, err := srv.con.Connection.Channel()
+	if err != nil {
+		srv.log.Error(err)
+		return err
+	}
+
+	srv.publishChannel = ch
+
+	if err = srv.publishChannel.Confirm(false); err != nil {
+		return err
+	}
+
+	srv.confirmationChan = srv.publishChannel.NotifyPublish(make(chan amqp.Confirmation, 1))
+
+	return nil
 
 }
 

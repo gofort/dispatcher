@@ -1,7 +1,11 @@
 package dispatcher
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/RichardKnop/machinery/v1/logger"
+	"github.com/RichardKnop/machinery/v1/signatures"
 	"github.com/gofort/dispatcher/utils"
 	"github.com/streadway/amqp"
 	"reflect"
@@ -10,10 +14,10 @@ import (
 )
 
 type WorkerConfig struct {
-	Limit        int    // Parallel tasks limit
-	Exchange     string // dispatcher
-	DefaultQueue string // scalet_backup, scalet_management, scalet_create
-	BindingKey   string // If no routing key in task - this will be used, it is like default routing key for all tasks
+	Limit        int      // Parallel tasks limit
+	Exchange     string   // dispatcher
+	DefaultQueue string   // scalet_backup, scalet_management, scalet_create
+	BindingKeys  []string // If no routing key in task - this will be used, it is like default routing key for all tasks
 	Name         string
 }
 
@@ -60,15 +64,19 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 		return nil, err
 	}
 
-	if err := ch.QueueBind(
-		queue.Name,     // name of the queue
-		cfg.BindingKey, // binding key
-		cfg.Exchange,   // source exchange
-		false,          // noWait
-		amqp.Table(map[string]interface{}{}), // TODO arguments, not implemented
-	); err != nil {
-		s.log.Errorf("Error during binding queue: %s", err)
-		return nil, err
+	for _, k := range cfg.BindingKeys {
+
+		if err := ch.QueueBind(
+			queue.Name,   // name of the queue
+			k,            // binding key
+			cfg.Exchange, // source exchange
+			false,        // noWait
+			amqp.Table(map[string]interface{}{}), // TODO arguments, not implemented
+		); err != nil {
+			s.log.Errorf("Error during binding queue: %s", err)
+			return nil, err
+		}
+
 	}
 
 	if err = ch.Qos(
@@ -76,10 +84,17 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 		0,         // prefetch size
 		false,     // global
 	); err != nil {
+		s.log.Error(err)
 		return nil, err
 	}
 
 	worker.Channel = ch
+
+	delivery, err := worker.startConsume(worker.Channel, cfg.DefaultQueue, cfg.Name)
+	if err != nil {
+		s.log.Error(err)
+		return nil, err
+	}
 
 	return worker, nil
 
@@ -101,12 +116,52 @@ func (w *Worker) startConsume(ch *amqp.Channel, queue string, workerName string)
 
 }
 
-func (w *Worker) processTask(task *Task) {
+func (w *Worker) consume(deliveries <-chan amqp.Delivery) error {
+	errorsChan := make(chan error)
+	for {
+		select {
+		case err := <-errorsChan:
+			return err
+		case d := <-deliveries:
+
+			go func() {
+				w.consumeOne(d, errorsChan)
+			}()
+
+		case <-w.StopConsume:
+			return nil
+		}
+	}
+}
+
+func (w *Worker) consumeOne(d amqp.Delivery, errorsChan chan error) {
+
+	if len(d.Body) == 0 {
+		d.Nack(false, false)                                   // multiple, requeue
+		errorsChan <- errors.New("Received an empty message.") // RabbitMQ down?
+		return
+	}
+
+	var task Task
+	if err := json.Unmarshal(d.Body, &task); err != nil {
+		d.Nack(false, false)
+		errorsChan <- err
+		return
+	}
 
 	taskConfig, ok := w.Tasks[task.Name]
 	if !ok {
+		d.Nack(false, true) // multiple, requeue
 		return
 	}
+
+	w.processTask(&task, taskConfig)
+
+	d.Ack(false) // multiple
+
+}
+
+func (w *Worker) processTask(task *Task, taskConfig TaskConfig) {
 
 	reflectedTaskFunction := reflect.ValueOf(taskConfig.Function)
 	reflectedTaskArgs, err := reflectArgs(task.Args)

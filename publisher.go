@@ -74,17 +74,12 @@ func (s *Server) publishTask(task *Task) error {
 		return err
 	}
 
+	// TODO In some cases connection can be, but publish channel can be broken
 	if !s.con.Connected {
 		return errors.New("Service is disconnected")
 	}
 
-	ch, err := s.con.Connection.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
-
-	err = ch.Publish(task.Exchange, task.RoutingKey, false, false, amqp.Publishing{
+	err = s.publishChannel.Publish(task.Exchange, task.RoutingKey, false, false, amqp.Publishing{
 		Headers:      amqp.Table(task.Headers),
 		ContentType:  "application/json",
 		Body:         msg,
@@ -94,5 +89,11 @@ func (s *Server) publishTask(task *Task) error {
 		return err
 	}
 
-	return nil
+	confirmed := <-s.confirmationChan
+
+	if confirmed.Ack {
+		return nil
+	}
+
+	return errors.New("Failed to deliver message")
 }
