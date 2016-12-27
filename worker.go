@@ -4,34 +4,59 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/RichardKnop/machinery/v1/logger"
-	"github.com/RichardKnop/machinery/v1/signatures"
 	"github.com/gofort/dispatcher/utils"
 	"github.com/streadway/amqp"
 	"reflect"
 	"runtime/debug"
+	"sync"
 	"time"
 )
 
 type WorkerConfig struct {
-	Limit        int      // Parallel tasks limit
-	Exchange     string   // dispatcher
-	DefaultQueue string   // scalet_backup, scalet_management, scalet_create
-	BindingKeys  []string // If no routing key in task - this will be used, it is like default routing key for all tasks
+	Limit        int
+	Exchange     string
+	DefaultQueue string
+	BindingKeys  []string
 	Name         string
 }
 
 type TaskConfig struct {
-	TimeoutSeconds int64 // in seconds
+	TimeoutSeconds int64
 	Function       interface{}
 }
 
 type Worker struct {
-	Channel       *amqp.Channel
-	log           Log
-	StopConsume   chan bool
-	TasksFinished chan bool
-	Tasks         map[string]TaskConfig
+	channel         *amqp.Channel
+	name            string
+	log             Log
+	stopConsume     chan bool
+	tasksFinished   chan bool
+	connect         chan bool
+	tasks           map[string]TaskConfig
+	TasksInProgress TasksInProgress
+}
+
+type TasksInProgress struct {
+	sync.Mutex
+	counter int
+}
+
+func (t *TasksInProgress) inc() {
+	t.Lock()
+	t.counter++
+	t.Unlock()
+}
+
+func (t *TasksInProgress) dec() {
+	t.Lock()
+	t.counter--
+	t.Unlock()
+}
+
+func (t *TasksInProgress) Get() int {
+	t.Lock()
+	defer t.Unlock()
+	return t.counter
 }
 
 func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Worker, error) {
@@ -39,11 +64,16 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 	worker := new(Worker)
 	worker.log = s.log
 
+	worker.name = cfg.Name
+
+	worker.tasksFinished = make(chan bool)
+
 	ch, err := s.con.Connection.Channel()
 	if err != nil {
 		s.log.Errorf("Error during creating channel: %s", err)
 		return nil, err
 	}
+	defer ch.Close()
 
 	err = declareExchange(ch, cfg.Exchange)
 	if err != nil {
@@ -51,14 +81,7 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 		return nil, err
 	}
 
-	queue, err := ch.QueueDeclare(
-		cfg.DefaultQueue, // name
-		true,             // durable
-		false,            // delete when unused
-		false,            // exclusive
-		false,            // no-wait
-		nil,              // arguments
-	)
+	err = declareQueue(ch, cfg.DefaultQueue)
 	if err != nil {
 		s.log.Errorf("Error during declaring queue: %s", err)
 		return nil, err
@@ -66,45 +89,82 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 
 	for _, k := range cfg.BindingKeys {
 
-		if err := ch.QueueBind(
-			queue.Name,   // name of the queue
-			k,            // binding key
-			cfg.Exchange, // source exchange
-			false,        // noWait
-			amqp.Table(map[string]interface{}{}), // TODO arguments, not implemented
-		); err != nil {
+		err = queueBind(ch, cfg.Exchange, cfg.DefaultQueue, k)
+		if err != nil {
 			s.log.Errorf("Error during binding queue: %s", err)
 			return nil, err
 		}
 
 	}
 
-	if err = ch.Qos(
-		cfg.Limit, // prefetch count
-		0,         // prefetch size
-		false,     // global
-	); err != nil {
-		s.log.Error(err)
-		return nil, err
-	}
+	go func() {
 
-	worker.Channel = ch
+		for {
 
-	delivery, err := worker.startConsume(worker.Channel, cfg.DefaultQueue, cfg.Name)
-	if err != nil {
-		s.log.Error(err)
-		return nil, err
-	}
+			select {
+
+			case <-worker.connect:
+
+				worker.channel.Close()
+
+				delivery, err := worker.initWorker(s.con.Connection, cfg.DefaultQueue, cfg.Name, cfg.Limit)
+				if err != nil {
+					s.log.Error(err)
+					return nil, err
+				}
+
+			}
+
+		}
+
+	}()
+
+	worker.connect <- true
 
 	return worker, nil
 
 }
 
-// TODO Stop Worker
+func (w *Worker) Stop() {
 
-func (w *Worker) startConsume(ch *amqp.Channel, queue string, workerName string) (<-chan amqp.Delivery, error) {
+	w.stopConsume <- true
 
-	return ch.Consume(
+	go func() {
+		for range time.Tick(time.Second * 1) {
+			t := w.TasksInProgress.Get()
+			if t == 0 {
+				w.log.Infof("Worker %s has finished all tasks", w.name)
+				w.tasksFinished <- true
+				break
+			}
+			w.log.Infof("Worker %s has %d unfinished tasks", w.name, t)
+		}
+	}()
+
+}
+
+func (w *Worker) initWorker(con *amqp.Connection, queue string, workerName string, limit int) (<-chan amqp.Delivery, error) {
+
+	var err error
+
+	w.channel, err = con.Channel()
+	if err != nil {
+		w.log.Errorf("Error during creating channel: %s", err)
+		return nil, err
+	}
+	//defer ch.Close()
+	// TODO Close??
+
+	if err := w.channel.Qos(
+		limit, // prefetch count
+		0,     // prefetch size
+		false, // global
+	); err != nil {
+		w.log.Error(err)
+		return nil, err
+	}
+
+	deliveries, err := w.channel.Consume(
 		queue,      // queue
 		workerName, // consumer tag
 		false,      // auto-ack
@@ -113,22 +173,38 @@ func (w *Worker) startConsume(ch *amqp.Channel, queue string, workerName string)
 		false,      // no-wait
 		nil,        // arguments
 	)
+	if err != nil {
+		w.log.Error(err)
+		return nil, err
+	}
+
+	w.stopConsume = make(chan bool)
 
 }
 
 func (w *Worker) consume(deliveries <-chan amqp.Delivery) error {
+
 	errorsChan := make(chan error)
+
 	for {
 		select {
 		case err := <-errorsChan:
-			return err
+
+			// TODO Try to reinit worker?
+
 		case d := <-deliveries:
 
 			go func() {
+				w.TasksInProgress.inc()
 				w.consumeOne(d, errorsChan)
+				w.TasksInProgress.dec()
 			}()
 
-		case <-w.StopConsume:
+		case <-w.stopConsume:
+
+			// TODO close(deliveries) ?
+			// TODO close channel?
+
 			return nil
 		}
 	}
@@ -137,31 +213,36 @@ func (w *Worker) consume(deliveries <-chan amqp.Delivery) error {
 func (w *Worker) consumeOne(d amqp.Delivery, errorsChan chan error) {
 
 	if len(d.Body) == 0 {
-		d.Nack(false, false)                                   // multiple, requeue
-		errorsChan <- errors.New("Received an empty message.") // RabbitMQ down?
+
+		if err := d.Nack(false, false); err != nil {
+			w.log.Error(err)
+			errorsChan <- err
+		}
+
+		w.log.Error(errors.New("Empty task received"))
 		return
 	}
 
 	var task Task
 	if err := json.Unmarshal(d.Body, &task); err != nil {
-		d.Nack(false, false)
-		errorsChan <- err
+
+		if er := d.Nack(false, false); er != nil {
+			w.log.Error(er)
+			errorsChan <- er
+		}
+
+		w.log.Error(errors.New("Can't unmarshal received task"))
 		return
 	}
 
-	taskConfig, ok := w.Tasks[task.Name]
+	taskConfig, ok := w.tasks[task.Name]
 	if !ok {
-		d.Nack(false, true) // multiple, requeue
+		if er := d.Nack(false, true); er != nil {
+			w.log.Error(er)
+			errorsChan <- er
+		}
 		return
 	}
-
-	w.processTask(&task, taskConfig)
-
-	d.Ack(false) // multiple
-
-}
-
-func (w *Worker) processTask(task *Task, taskConfig TaskConfig) {
 
 	reflectedTaskFunction := reflect.ValueOf(taskConfig.Function)
 	reflectedTaskArgs, err := reflectArgs(task.Args)
@@ -172,7 +253,11 @@ func (w *Worker) processTask(task *Task, taskConfig TaskConfig) {
 
 	tryCall(reflectedTaskFunction, reflectedTaskArgs, taskConfig.TimeoutSeconds)
 
-	return
+	if err := d.Ack(false); err != nil {
+		w.log.Error(err)
+		errorsChan <- err
+	}
+
 }
 
 func reflectArgs(args []TaskArgument) ([]reflect.Value, error) {
@@ -213,6 +298,7 @@ func tryCall(f reflect.Value, args []reflect.Value, timeoutSeconds int64) {
 
 	select {
 	case <-timer.C:
+		// TODO Log about timeout?
 	case <-resultsChan:
 	}
 

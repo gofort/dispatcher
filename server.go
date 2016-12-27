@@ -85,7 +85,16 @@ func NewServer(cfg *ServerConfig) *Server {
 
 				srv.initPublishChannel()
 
+				for k, v := range srv.workers {
+					v.connect <- true
+				}
+
 			case <-startGlobalShutoff:
+
+				for k, v := range srv.workers {
+					v.stopConsume <- true
+				}
+
 				srv.log.Info("Start global shutoff chan")
 			}
 		}
@@ -214,8 +223,6 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 
 		select {
 		case <-notifyClose:
-
-			// TODO Pause workers
 
 			s.Connected = false
 
