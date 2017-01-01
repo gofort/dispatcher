@@ -47,6 +47,8 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 		select {
 		case <-notifyClose:
 
+			notifyConnected <- false
+
 			s.Connected = false
 
 			// Loop will be continued after this disconnection

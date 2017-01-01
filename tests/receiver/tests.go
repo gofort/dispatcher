@@ -4,7 +4,6 @@ import (
 	"github.com/gofort/dispatcher"
 	"github.com/gofort/dispatcher/tests/tasks"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 func main() {
@@ -35,23 +34,29 @@ func main() {
 
 	server := dispatcher.NewServer(&servercfg)
 
-	task := tasks.CompoundTask()
+	t := make(map[string]dispatcher.TaskConfig)
+	t["compound"] = tasks.CompoundTaskConfig()
 
-	logrus.Info("Started")
+	w, err := server.NewWorker(
+		&dispatcher.WorkerConfig{
+			Limit:    10,
+			Exchange: "dispatcher",
+			Queue:    "queue_1",
+			Name:     "worker_1",
+		},
+		t,
+	)
 
-	// 500 messages for 13 seconds if new channel for every delivery
-	// 500 messages for 12 seconds if common channel for all publishers
-	// 500 messages for 1 second if common channel for all publishers and every publish in goroutine
-	// 500 messages for 1 second if new channel for every delivery and every publish in goroutine
-
-	for {
-		time.Sleep(time.Second * 2)
-		err := server.Publish(task)
-		if err != nil {
-			logrus.Error(err)
-		} else {
-			logrus.Info("Sended")
-		}
+	if err != nil {
+		logrus.Error(err)
+		return
 	}
+
+	if err = w.Start(); err != nil {
+		logrus.Error(err)
+		return
+	}
+
+	select {}
 
 }

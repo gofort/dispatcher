@@ -48,4 +48,6 @@ func bootstrapExchanges(ch *amqp.Channel, exchanges []Exchange) error {
 
 	}
 
+	return nil
+
 }

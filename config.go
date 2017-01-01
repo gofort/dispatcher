@@ -11,6 +11,7 @@ type ServerConfig struct {
 	DebugMode                   bool // for default logger only
 	InitExchanges               []Exchange
 	DefaultPublishSettings      PublishSettings
+	Logger                      Log
 }
 
 type PublishSettings struct {

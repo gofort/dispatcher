@@ -18,6 +18,34 @@ type Publisher struct {
 	defaultRoutingKey string
 }
 
+func (s *Publisher) init(con *amqp.Connection) error {
+
+	ch, err := con.Channel()
+	if err != nil {
+		return err
+	}
+
+	s.ch = ch
+
+	if err = s.ch.Confirm(false); err != nil {
+		return err
+	}
+
+	s.confirmationChan = s.ch.NotifyPublish(make(chan amqp.Confirmation, 1))
+
+	s.active = true
+
+	return nil
+}
+
+func (s *Publisher) deactivate() {
+
+	s.active = false
+	s.ch.Close()
+	close(s.confirmationChan)
+
+}
+
 func (s *Publisher) PublishCustom(task *Task, exchange, routingKey string) error {
 
 	if task.Exchange == "" {
