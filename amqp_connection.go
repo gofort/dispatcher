@@ -29,6 +29,8 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 
 		var err error
 
+		log.Debug("Trying to connect to AMQP")
+
 		s.Connection, err = connectToAMQP(cfg.AMQPConnectionString, cfg.SecureConnection, cfg.TLSConfig)
 		if err != nil {
 			log.Error(err)
@@ -47,6 +49,8 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 		select {
 		case <-notifyClose:
 
+			log.Debug("AMQP connection closed")
+
 			notifyConnected <- false
 
 			s.Connected = false
@@ -55,11 +59,15 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 
 		case <-s.Close:
 
+			log.Debug("Stopping all workers")
+
 			// Start workers closing operation
 			startGlobalShutoff <- true
 
 			// When all workers are finished - close connection
 			<-workersFinished
+
+			log.Debug("All workers finished -> closing AMQP connection")
 
 			if err := s.Connection.Close(); err != nil {
 				log.Error(err)

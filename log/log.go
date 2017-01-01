@@ -1,23 +1,28 @@
 package log
 
 import (
-	"github.com/sirupsen/logrus"
-	"runtime"
-	"path"
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"path"
+	"runtime"
+	"sync"
 )
 
 type Logger struct {
 	log *logrus.Entry
 }
 
-type CallerInfoHook struct {}
+type CallerInfoHook struct {
+	sync.Mutex
+}
 
 func (hook CallerInfoHook) Levels() []logrus.Level {
 	return logrus.AllLevels
 }
 
 func (hook CallerInfoHook) Fire(entry *logrus.Entry) error {
+	hook.Lock()
+	defer hook.Unlock()
 
 	if pc, file, line, ok := runtime.Caller(6); ok {
 
@@ -36,13 +41,13 @@ func InitLogger(debug bool) *Logger {
 	l := new(Logger)
 
 	lg := logrus.New()
-	lg.Hooks.Add(&CallerInfoHook{})
-
-	l.log = lg.WithField("source", "dispatcher")
+	//lg.Hooks.Add(&CallerInfoHook{})
 
 	if debug {
-		l.log.Level = logrus.DebugLevel
+		lg.Level = logrus.DebugLevel
 	}
+
+	l.log = lg.WithField("source", "dispatcher")
 
 	return l
 

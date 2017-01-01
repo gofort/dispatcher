@@ -24,6 +24,7 @@ func NewServer(cfg *ServerConfig) *Server {
 		workers: make(map[string]*Worker),
 		con:     new(amqpConnection),
 	}
+	srv.Publisher.log = srv.log
 
 	if cfg.Logger == nil {
 		srv.log = log.InitLogger(cfg.DebugMode)
@@ -47,7 +48,7 @@ func NewServer(cfg *ServerConfig) *Server {
 
 				if connected {
 
-					srv.log.Info("Notify connected chan")
+					srv.log.Debug("Dispatcher is reconnected to AMQP")
 
 					err := srv.Publisher.init(srv.con.Connection)
 					if err != nil {
@@ -63,14 +64,14 @@ func NewServer(cfg *ServerConfig) *Server {
 
 				} else {
 
-					srv.Publisher.active = false
+					srv.Publisher.deactivate(false)
 
 				}
 
 			case <-startGlobalShutoff:
-				srv.log.Info("Start global shutoff chan")
+				srv.log.Debug("Starting global shutoff")
 
-				srv.Publisher.deactivate()
+				srv.Publisher.deactivate(true)
 
 				var wg sync.WaitGroup
 
@@ -85,6 +86,7 @@ func NewServer(cfg *ServerConfig) *Server {
 
 				}
 
+				srv.log.Debug("Waiting for all worker to be done")
 				wg.Wait()
 
 				workersFinished <- true
@@ -93,7 +95,7 @@ func NewServer(cfg *ServerConfig) *Server {
 		}
 	}()
 
-	srv.log.Info("Connected to AMQP")
+	srv.log.Debug("Dispatcher is connected to AMQP")
 
 	err := srv.Publisher.init(srv.con.Connection)
 	if err != nil {

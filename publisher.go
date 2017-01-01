@@ -20,6 +20,8 @@ type Publisher struct {
 
 func (s *Publisher) init(con *amqp.Connection) error {
 
+	s.log.Debug("Publisher initialization")
+
 	ch, err := con.Channel()
 	if err != nil {
 		return err
@@ -35,14 +37,23 @@ func (s *Publisher) init(con *amqp.Connection) error {
 
 	s.active = true
 
+	s.log.Debug("Publisher is ready")
+
 	return nil
 }
 
-func (s *Publisher) deactivate() {
+func (s *Publisher) deactivate(closeChan bool) {
+
+	s.log.Debug("Deactivating publisher")
 
 	s.active = false
 	s.ch.Close()
-	close(s.confirmationChan)
+
+	if closeChan {
+		close(s.confirmationChan)
+	}
+
+	s.log.Debug("Publisher is deactivated")
 
 }
 

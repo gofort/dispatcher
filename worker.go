@@ -87,6 +87,8 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 		return nil, err
 	}
 
+	s.workers[cfg.Name] = w
+
 	return w, nil
 
 }
@@ -119,7 +121,13 @@ func (w *Worker) consume(deliveries <-chan amqp.Delivery) error {
 
 	for {
 		select {
+		case <-w.stopConsume:
+			w.log.Debug("Consuming stopped")
+			return nil
+
 		case d := <-deliveries:
+
+			w.log.Debug("Task received")
 
 			w.tasksInProgress.Add(1)
 
@@ -127,17 +135,18 @@ func (w *Worker) consume(deliveries <-chan amqp.Delivery) error {
 				defer w.tasksInProgress.Done()
 				err := w.consumeOne(d)
 				if err != nil {
+					w.log.Debug("Sending consuming stopper")
 					w.stopConsume <- true
 				}
 			}()
-
-		case <-w.stopConsume:
-			return nil
 		}
 	}
+
 }
 
 func (w *Worker) reconnect(con *amqp.Connection) error {
+
+	w.log.Debug("Worker reconnecting")
 
 	var err error
 
@@ -153,6 +162,8 @@ func (w *Worker) reconnect(con *amqp.Connection) error {
 	); err != nil {
 		return err
 	}
+
+	w.stopConsume = make(chan bool, 1)
 
 	if err := w.Start(); err != nil {
 		return err
@@ -196,6 +207,8 @@ func (w *Worker) consumeOne(d amqp.Delivery) error {
 		w.log.Error(errors.New("Can't unmarshal received task"))
 		return err
 	}
+
+	w.log.Debugf("Handling task %s", task.UUID)
 
 	taskConfig, ok := w.tasks[task.Name]
 	if !ok {
