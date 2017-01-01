@@ -57,7 +57,7 @@ func main() {
 
 	for {
 		time.Sleep(time.Second * 2)
-		err := server.PublishDefault(&task)
+		err := server.Publish(&task)
 		if err != nil {
 			logrus.Error(err)
 		} else {

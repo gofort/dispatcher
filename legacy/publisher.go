@@ -8,12 +8,10 @@ import (
 )
 
 type Publisher struct {
-	log Log
-
-	ch               *amqp.Channel
-	confirmationChan chan amqp.Confirmation
-	active           bool
-
+	log               Log
+	ch                *amqp.Channel
+	confirmationChan  chan amqp.Confirmation
+	active            bool
 	defaultExchange   string
 	defaultRoutingKey string
 }
