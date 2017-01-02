@@ -206,6 +206,8 @@ func (w *Worker) Close() {
 func (w *Worker) consumeOne(d amqp.Delivery) {
 	defer w.tasksInProgress.Done()
 
+	// TODO Rethink this part
+
 	var err error
 
 	var task Task
@@ -217,18 +219,19 @@ func (w *Worker) consumeOne(d amqp.Delivery) {
 		return
 	}
 
-	w.log.Debugf("Handling task %s", task.UUID)
-
 	taskConfig, ok := w.tasks[task.Name]
 	if !ok {
 		d.Nack(false, true)
 		return
 	}
 
+	w.log.Debugf("Handling task %s", task.UUID)
+
 	reflectedTaskFunction := reflect.ValueOf(taskConfig.Function)
 
 	reflectedTaskArgs, err := reflectArgs(task.Args)
 	if err != nil {
+		d.Nack(false, false)
 		w.log.Errorf("Can't reflect task (%s) arguments: %v", task.UUID, err)
 		return
 	}

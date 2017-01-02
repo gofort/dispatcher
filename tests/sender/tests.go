@@ -41,7 +41,7 @@ func main() {
 	// 500 messages for 1 second if common channel for all publishers and every publish in goroutine
 	// 500 messages for 1 second if new channel for every delivery and every publish in goroutine
 
-	for {
+	for i := 0; i < 15; i++ {
 		server.Publish(tasks.Test1Task())
 		server.Publish(tasks.Test2Task())
 		server.Publish(tasks.Test3Task())

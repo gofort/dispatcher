@@ -29,7 +29,7 @@ func Test1Task() *dispatcher.Task {
 
 func Test1TaskConfig() dispatcher.TaskConfig {
 	return dispatcher.TaskConfig{
-		TimeoutSeconds: 15,
+		TimeoutSeconds: 30,
 		Function: func(first, second int) {
 			fmt.Println("Test 1 task started")
 			time.Sleep(time.Second * 3)
@@ -58,7 +58,7 @@ func Test2Task() *dispatcher.Task {
 
 func Test2TaskConfig() dispatcher.TaskConfig {
 	return dispatcher.TaskConfig{
-		TimeoutSeconds: 15,
+		TimeoutSeconds: 30,
 		Function: func(first, second int) {
 			fmt.Println("Test 2 task started")
 			time.Sleep(time.Second * 4)
@@ -87,7 +87,7 @@ func Test3Task() *dispatcher.Task {
 
 func Test3TaskConfig() dispatcher.TaskConfig {
 	return dispatcher.TaskConfig{
-		TimeoutSeconds: 15,
+		TimeoutSeconds: 30,
 		Function: func(first, second int) {
 			fmt.Println("Test 3 task started")
 			time.Sleep(time.Second * 7)
