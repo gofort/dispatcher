@@ -40,9 +40,9 @@ func main() {
 	t["test_2"] = tasks.Test2TaskConfig()
 	t["test_3"] = tasks.Test3TaskConfig()
 
-	w, err := server.NewWorker(
+	_, err := server.NewWorker(
 		&dispatcher.WorkerConfig{
-			Limit:    3,
+			Limit:    50,
 			Exchange: "dispatcher",
 			Queue:    "queue_1",
 			Name:     "worker_1",
@@ -55,12 +55,7 @@ func main() {
 		return
 	}
 
-	if err = w.Start(); err != nil {
-		logrus.Error(err)
-		return
-	}
-
 	time.Sleep(time.Second * 7)
-	select {}
+	server.Close()
 
 }

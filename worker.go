@@ -26,15 +26,18 @@ type TaskConfig struct {
 }
 
 type Worker struct {
-	ch              *amqp.Channel
-	name            string
-	log             Log
-	tasksInProgress *sync.WaitGroup
-	tasks           map[string]TaskConfig
-	limit           int
-	queue           string
-	deliveries      <-chan amqp.Delivery
-	stopConsume     chan bool
+	log Log // logger, which was taken from server instance
+
+	ch              *amqp.Channel        // channel which is used for messages consuming
+	stopConsume     chan bool            // channel which is used to stop consuming process
+	deliveries      <-chan amqp.Delivery // deliveries which worker is receiving
+	tasksInProgress *sync.WaitGroup      // wait group for waiting all tasks finishing when we close this worker
+	queue           string               // queue name which will be subscribed by this worker
+
+	name  string // worker name, also used as consumer tag
+	limit int    // number of tasks which can be executed in parallel
+
+	tasks map[string]TaskConfig // tasks configurations, to know their timeouts and know if this worker should execute task
 }
 
 func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Worker, error) {
@@ -51,7 +54,7 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 
 	var err error
 
-	w.ch, err = s.con.Connection.Channel()
+	w.ch, err = s.con.con.Channel()
 	if err != nil {
 		s.log.Errorf("Error during creating channel: %s", err)
 		return nil, err
@@ -59,7 +62,7 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 
 	err = declareExchange(w.ch, cfg.Exchange)
 	if err != nil {
-		s.log.Error(err)
+		s.log.Error("Error during declaring exchange: %s", err)
 		return nil, err
 	}
 
@@ -88,13 +91,18 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 		return nil, err
 	}
 
+	if err := w.start(); err != nil {
+		w.log.Error(err)
+		return nil, err
+	}
+
 	s.workers[cfg.Name] = w
 
 	return w, nil
 
 }
 
-func (w *Worker) Start() error {
+func (w *Worker) start() error {
 
 	var err error
 
@@ -171,9 +179,9 @@ func (w *Worker) reconnect(con *amqp.Connection) error {
 		return err
 	}
 
-	w.stopConsume = make(chan bool, 1)
+	w.stopConsume = make(chan bool)
 
-	if err := w.Start(); err != nil {
+	if err := w.start(); err != nil {
 		return err
 	}
 
@@ -185,9 +193,11 @@ func (w *Worker) Close() {
 
 	w.log.Debug("Worker closing started")
 
-	w.ch.Close()
+	w.stopConsume <- true
 
 	w.tasksInProgress.Wait()
+
+	w.ch.Close()
 
 	w.log.Debug("Worker is closed")
 
@@ -251,8 +261,6 @@ func tryCall(f reflect.Value, args []reflect.Value, timeoutSeconds int64) {
 		}
 	}()
 
-	// TODO Add task UUID to function which we call
-
 	if timeoutSeconds == 0 {
 		f.Call(args)
 		return
@@ -267,7 +275,7 @@ func tryCall(f reflect.Value, args []reflect.Value, timeoutSeconds int64) {
 
 	select {
 	case <-timer.C:
-	// TODO Log about timeout?
+
 	case <-resultsChan:
 	}
 

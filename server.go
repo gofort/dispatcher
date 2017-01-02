@@ -9,11 +9,12 @@ import (
 type Server struct {
 	con                *amqpConnection
 	notifyConnected    chan bool
-	startGlobalShutoff chan bool
+	startGlobalShutoff chan struct{}
 
 	log     Log
 	workers map[string]*Worker
 	*Publisher
+	// TODO Task UUID as first argument?
 }
 
 func NewServer(cfg *ServerConfig) *Server {
@@ -23,12 +24,12 @@ func NewServer(cfg *ServerConfig) *Server {
 			defaultRoutingKey: cfg.DefaultPublishSettings.RoutingKey,
 			defaultExchange:   cfg.DefaultPublishSettings.Exchange,
 		},
-		startGlobalShutoff: make(chan bool),
+		startGlobalShutoff: make(chan struct{}),
 		log:                log.InitLogger(cfg.DebugMode),
 		notifyConnected:    make(chan bool),
 		workers:            make(map[string]*Worker),
 		con: &amqpConnection{
-			workersFinished:  make(chan bool),
+			workersFinished:  make(chan struct{}),
 			stopReconnecting: make(chan struct{}),
 		},
 	}
@@ -44,7 +45,6 @@ func NewServer(cfg *ServerConfig) *Server {
 
 	<-srv.notifyConnected
 
-	// Cap for channels
 	go func() {
 		for {
 			select {
@@ -52,15 +52,13 @@ func NewServer(cfg *ServerConfig) *Server {
 
 				if connected {
 
-					srv.log.Debug("Dispatcher is reconnected to AMQP")
-
-					err := srv.Publisher.init(srv.con.Connection)
+					err := srv.Publisher.init(srv.con.con)
 					if err != nil {
 						srv.log.Error(err)
 					}
 
 					for _, v := range srv.workers {
-						err = v.reconnect(srv.con.Connection)
+						err = v.reconnect(srv.con.con)
 						if err != nil {
 							srv.log.Error(err)
 						}
@@ -73,7 +71,7 @@ func NewServer(cfg *ServerConfig) *Server {
 				}
 
 			case <-srv.startGlobalShutoff:
-				srv.log.Debug("Starting global shutoff")
+				srv.log.Debug("Starting global shutoff: close publisher, stop workers consuming, wait for all tasks to be finished")
 
 				srv.Publisher.deactivate()
 
@@ -92,17 +90,15 @@ func NewServer(cfg *ServerConfig) *Server {
 
 				srv.log.Debug("Waiting for all worker to be done")
 				wg.Wait()
-				srv.log.Debug("All workers finished their tasks!")
+				srv.log.Debug("All workers finished their tasks and were closed!")
 
-				srv.con.workersFinished <- true
+				srv.con.workersFinished <- struct{}{}
 
 			}
 		}
 	}()
 
-	srv.log.Debug("Dispatcher is connected to AMQP")
-
-	err := srv.Publisher.init(srv.con.Connection)
+	err := srv.Publisher.init(srv.con.con)
 	if err != nil {
 		srv.log.Error(err)
 		return nil

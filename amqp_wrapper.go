@@ -34,6 +34,6 @@ func queueBind(ch *amqp.Channel, exchange, queue, bindingKey string) error {
 		bindingKey, // binding key
 		exchange,   // source exchange
 		false,      // noWait
-		amqp.Table(map[string]interface{}{}), // TODO arguments, not implemented
+		amqp.Table(map[string]interface{}{}),
 	)
 }
