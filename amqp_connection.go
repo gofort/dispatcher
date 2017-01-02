@@ -9,13 +9,14 @@ import (
 )
 
 type amqpConnection struct {
-	Connection *amqp.Connection
-	Close      chan bool
-	mtx        sync.Mutex
-	Connected  bool
+	Connection       *amqp.Connection
+	workersFinished  chan bool
+	stopReconnecting chan struct{}
+	mtx              sync.Mutex
+	Connected        bool
 }
 
-func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnected chan bool, startGlobalShutoff chan bool, workersFinished chan bool) {
+func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnected, startGlobalShutoff chan bool) {
 
 	// TODO Think about refactor for counter := 0 ; ...
 	counter := 0
@@ -52,35 +53,34 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 			log.Debug("AMQP connection closed")
 
 			notifyConnected <- false
-
 			s.Connected = false
 
 			// Loop will be continued after this disconnection
 
-		case <-s.Close:
-
-			log.Debug("Stopping all workers")
-
-			// Start workers closing operation
-			startGlobalShutoff <- true
-
-			// When all workers are finished - close connection
-			<-workersFinished
-
-			log.Debug("All workers finished -> closing AMQP connection")
-
-			if err := s.Connection.Close(); err != nil {
-				log.Error(err)
-			}
-
-			s.Connected = false
-
+		case <-s.stopReconnecting:
+			log.Debug("Stopping reconnecting process")
 			return
-
 		}
 
 	}
 
+}
+
+func (s *amqpConnection) close(log Log, startGlobalShutoff chan bool) {
+
+	startGlobalShutoff <- true
+
+	<-s.workersFinished
+
+	log.Debug("All workers finished -> closing AMQP connection")
+
+	if err := s.Connection.Close(); err != nil {
+		log.Error(err)
+	}
+
+	s.Connected = false
+
+	return
 }
 
 func connectToAMQP(url string, secure bool, tlscfg *tls.Config) (*amqp.Connection, error) {

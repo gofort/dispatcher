@@ -42,16 +42,12 @@ func (s *Publisher) init(con *amqp.Connection) error {
 	return nil
 }
 
-func (s *Publisher) deactivate(closeChan bool) {
+func (s *Publisher) deactivate() {
 
 	s.log.Debug("Deactivating publisher")
 
 	s.active = false
 	s.ch.Close()
-
-	if closeChan {
-		close(s.confirmationChan)
-	}
 
 	s.log.Debug("Publisher is deactivated")
 

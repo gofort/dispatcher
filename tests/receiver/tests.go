@@ -4,6 +4,7 @@ import (
 	"github.com/gofort/dispatcher"
 	"github.com/gofort/dispatcher/tests/tasks"
 	"github.com/sirupsen/logrus"
+	"time"
 )
 
 func main() {
@@ -35,11 +36,13 @@ func main() {
 	server := dispatcher.NewServer(&servercfg)
 
 	t := make(map[string]dispatcher.TaskConfig)
-	t["compound"] = tasks.CompoundTaskConfig()
+	t["test_1"] = tasks.Test1TaskConfig()
+	t["test_2"] = tasks.Test2TaskConfig()
+	t["test_3"] = tasks.Test3TaskConfig()
 
 	w, err := server.NewWorker(
 		&dispatcher.WorkerConfig{
-			Limit:    10,
+			Limit:    3,
 			Exchange: "dispatcher",
 			Queue:    "queue_1",
 			Name:     "worker_1",
@@ -57,6 +60,7 @@ func main() {
 		return
 	}
 
+	time.Sleep(time.Second * 7)
 	select {}
 
 }

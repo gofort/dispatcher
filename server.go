@@ -7,7 +7,10 @@ import (
 )
 
 type Server struct {
-	con     *amqpConnection
+	con                *amqpConnection
+	notifyConnected    chan bool
+	startGlobalShutoff chan bool
+
 	log     Log
 	workers map[string]*Worker
 	*Publisher
@@ -20,9 +23,14 @@ func NewServer(cfg *ServerConfig) *Server {
 			defaultRoutingKey: cfg.DefaultPublishSettings.RoutingKey,
 			defaultExchange:   cfg.DefaultPublishSettings.Exchange,
 		},
-		log:     log.InitLogger(cfg.DebugMode),
-		workers: make(map[string]*Worker),
-		con:     new(amqpConnection),
+		startGlobalShutoff: make(chan bool),
+		log:                log.InitLogger(cfg.DebugMode),
+		notifyConnected:    make(chan bool),
+		workers:            make(map[string]*Worker),
+		con: &amqpConnection{
+			workersFinished:  make(chan bool),
+			stopReconnecting: make(chan struct{}),
+		},
 	}
 	srv.Publisher.log = srv.log
 
@@ -32,19 +40,15 @@ func NewServer(cfg *ServerConfig) *Server {
 		srv.log = cfg.Logger
 	}
 
-	notifyConnected := make(chan bool)
-	startGlobalShutoff := make(chan bool)
-	workersFinished := make(chan bool)
+	go srv.con.initConnection(srv.log, cfg, srv.notifyConnected, srv.startGlobalShutoff)
 
-	go srv.con.initConnection(srv.log, cfg, notifyConnected, startGlobalShutoff, workersFinished)
-
-	<-notifyConnected
+	<-srv.notifyConnected
 
 	// Cap for channels
 	go func() {
 		for {
 			select {
-			case connected := <-notifyConnected:
+			case connected := <-srv.notifyConnected:
 
 				if connected {
 
@@ -64,32 +68,33 @@ func NewServer(cfg *ServerConfig) *Server {
 
 				} else {
 
-					srv.Publisher.deactivate(false)
+					srv.Publisher.deactivate()
 
 				}
 
-			case <-startGlobalShutoff:
+			case <-srv.startGlobalShutoff:
 				srv.log.Debug("Starting global shutoff")
 
-				srv.Publisher.deactivate(true)
+				srv.Publisher.deactivate()
 
-				var wg sync.WaitGroup
+				wg := new(sync.WaitGroup)
 
 				wg.Add(len(srv.workers))
 
 				for _, v := range srv.workers {
 
-					go func(w *Worker) {
+					go func(w *Worker, wg *sync.WaitGroup) {
+						defer wg.Done()
 						w.Close()
-						wg.Done()
-					}(v)
+					}(v, wg)
 
 				}
 
 				srv.log.Debug("Waiting for all worker to be done")
 				wg.Wait()
+				srv.log.Debug("All workers finished their tasks!")
 
-				workersFinished <- true
+				srv.con.workersFinished <- true
 
 			}
 		}
@@ -121,4 +126,9 @@ func (s *Server) GetWorkerByName(name string) (*Worker, error) {
 
 	return worker, nil
 
+}
+
+func (s *Server) Close() {
+	s.con.stopReconnecting <- struct{}{}
+	s.con.close(s.log, s.startGlobalShutoff)
 }

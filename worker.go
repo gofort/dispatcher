@@ -29,7 +29,7 @@ type Worker struct {
 	ch              *amqp.Channel
 	name            string
 	log             Log
-	tasksInProgress sync.WaitGroup
+	tasksInProgress *sync.WaitGroup
 	tasks           map[string]TaskConfig
 	limit           int
 	queue           string
@@ -40,12 +40,13 @@ type Worker struct {
 func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Worker, error) {
 
 	w := &Worker{
-		name:        cfg.Name,
-		log:         s.log,
-		tasks:       tasks,
-		limit:       cfg.Limit,
-		queue:       cfg.Queue,
-		stopConsume: make(chan bool, 1),
+		name:            cfg.Name,
+		log:             s.log,
+		tasks:           tasks,
+		limit:           cfg.Limit,
+		queue:           cfg.Queue,
+		stopConsume:     make(chan bool, 1),
+		tasksInProgress: new(sync.WaitGroup),
 	}
 
 	var err error
@@ -117,28 +118,35 @@ func (w *Worker) Start() error {
 
 }
 
-func (w *Worker) consume(deliveries <-chan amqp.Delivery) error {
+func (w *Worker) consume(deliveries <-chan amqp.Delivery) {
+
+	w.log.Debugf("Worker %s started consuming", w.name)
 
 	for {
 		select {
+
 		case <-w.stopConsume:
+
 			w.log.Debug("Consuming stopped")
-			return nil
+			return
 
 		case d := <-deliveries:
 
-			w.log.Debug("Task received")
+			if len(d.Body) == 0 {
+
+				if err := d.Nack(false, false); err != nil {
+					w.log.Errorf("Consuming stopped: %v", err)
+					return
+				}
+
+				w.log.Error("Empty task received")
+				continue
+			}
 
 			w.tasksInProgress.Add(1)
 
-			go func() {
-				defer w.tasksInProgress.Done()
-				err := w.consumeOne(d)
-				if err != nil {
-					w.log.Debug("Sending consuming stopper")
-					w.stopConsume <- true
-				}
-			}()
+			go w.consumeOne(d)
+
 		}
 	}
 
@@ -146,7 +154,7 @@ func (w *Worker) consume(deliveries <-chan amqp.Delivery) error {
 
 func (w *Worker) reconnect(con *amqp.Connection) error {
 
-	w.log.Debug("Worker reconnecting")
+	w.log.Debugf("Worker '%s' reconnecting", w.name)
 
 	var err error
 
@@ -175,66 +183,49 @@ func (w *Worker) reconnect(con *amqp.Connection) error {
 
 func (w *Worker) Close() {
 
+	w.log.Debug("Worker closing started")
+
 	w.ch.Close()
 
 	w.tasksInProgress.Wait()
 
+	w.log.Debug("Worker is closed")
+
 }
 
-func (w *Worker) consumeOne(d amqp.Delivery) error {
+func (w *Worker) consumeOne(d amqp.Delivery) {
+	defer w.tasksInProgress.Done()
 
 	var err error
-
-	if len(d.Body) == 0 {
-
-		if err := d.Nack(false, false); err != nil {
-			w.log.Error(err)
-			return err
-		}
-
-		w.log.Error(errors.New("Empty task received"))
-		return err
-	}
 
 	var task Task
 	if err := json.Unmarshal(d.Body, &task); err != nil {
 
-		if er := d.Nack(false, false); er != nil {
-			w.log.Error(er)
-			return er
-		}
+		d.Nack(false, false)
 
 		w.log.Error(errors.New("Can't unmarshal received task"))
-		return err
+		return
 	}
 
 	w.log.Debugf("Handling task %s", task.UUID)
 
 	taskConfig, ok := w.tasks[task.Name]
 	if !ok {
-		if er := d.Nack(false, true); er != nil {
-			w.log.Error(er)
-			return er
-		}
-		return nil
+		d.Nack(false, true)
+		return
 	}
 
 	reflectedTaskFunction := reflect.ValueOf(taskConfig.Function)
 
 	reflectedTaskArgs, err := reflectArgs(task.Args)
 	if err != nil {
-		w.log.Error(err)
-		return err
+		w.log.Errorf("Can't reflect task (%s) arguments: %v", task.UUID, err)
+		return
 	}
 
 	tryCall(reflectedTaskFunction, reflectedTaskArgs, taskConfig.TimeoutSeconds)
 
-	if err := d.Ack(false); err != nil {
-		w.log.Error(err)
-		return err
-	}
-
-	return nil
+	d.Ack(false)
 
 }
 
