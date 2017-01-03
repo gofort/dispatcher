@@ -38,7 +38,7 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 			continue
 		}
 
-		log.Debug("AMQP connection established")
+		log.Info("AMQP connection established")
 
 		counter = 0
 		notifyConnected <- true
@@ -50,7 +50,7 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 		select {
 		case <-notifyClose:
 
-			log.Debug("AMQP connection was closed")
+			log.Info("AMQP connection was closed")
 
 			notifyConnected <- false
 			s.connected = false

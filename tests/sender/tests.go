@@ -14,7 +14,7 @@ func main() {
 		ReconnectionIntervalSeconds: 5,
 		TLSConfig:                   nil,
 		SecureConnection:            false,
-		DebugMode:                   true,
+		//DebugMode:                   true,
 		InitExchanges: []dispatcher.Exchange{
 			dispatcher.Exchange{
 				Name: "dispatcher",

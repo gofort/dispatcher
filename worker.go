@@ -146,7 +146,7 @@ func (w *Worker) Start(s *Server) error {
 
 func (w *Worker) consume(deliveries <-chan amqp.Delivery) {
 
-	w.log.Debugf("Worker %s started consuming", w.name)
+	w.log.Infof("Worker %s started consuming", w.name)
 
 	for {
 		select {
@@ -222,7 +222,7 @@ func (w *Worker) Close() {
 
 	w.ch.Close()
 
-	w.log.Debugf("Worker %s is closed", w.name)
+	w.log.Infof("Worker %s is closed", w.name)
 
 }
 
@@ -231,7 +231,7 @@ func (w *Worker) consumeOne(d amqp.Delivery, task Task, taskConfig TaskConfig) {
 
 	var err error
 
-	w.log.Debugf("Handling task %s", task.UUID)
+	w.log.Infof("Handling task %s", task.UUID)
 
 	reflectedTaskFunction := reflect.ValueOf(taskConfig.Function)
 
@@ -244,7 +244,9 @@ func (w *Worker) consumeOne(d amqp.Delivery, task Task, taskConfig TaskConfig) {
 
 	timeouted := tryCall(reflectedTaskFunction, reflectedTaskArgs, taskConfig.TimeoutSeconds)
 	if timeouted {
-		w.log.Debugf("Task %s was finished by timeout", task.UUID)
+		w.log.Infof("Task %s was finished by timeout", task.UUID)
+	} else {
+		w.log.Infof("Task %s was finished", task.UUID)
 	}
 
 	d.Ack(false)

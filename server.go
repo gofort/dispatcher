@@ -90,9 +90,9 @@ func NewServer(cfg *ServerConfig) *Server {
 
 				}
 
-				srv.log.Debug("Waiting for all workers to be done")
+				srv.log.Info("Waiting for all workers to be done")
 				wg.Wait()
-				srv.log.Debug("All workers finished their tasks and were closed!")
+				srv.log.Info("All workers finished their tasks and were closed!")
 
 				srv.con.workersFinished <- struct{}{}
 
