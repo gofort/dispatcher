@@ -13,14 +13,14 @@ type Server struct {
 
 	log     Log
 	workers map[string]*Worker
-	*Publisher
+	*publisher
 	// TODO Task UUID as first argument?
 }
 
 func NewServer(cfg *ServerConfig) *Server {
 
 	srv := &Server{
-		Publisher: &Publisher{
+		publisher: &publisher{
 			defaultRoutingKey: cfg.DefaultPublishSettings.RoutingKey,
 			defaultExchange:   cfg.DefaultPublishSettings.Exchange,
 		},
@@ -33,7 +33,7 @@ func NewServer(cfg *ServerConfig) *Server {
 			stopReconnecting: make(chan struct{}),
 		},
 	}
-	srv.Publisher.log = srv.log
+	srv.publisher.log = srv.log
 
 	if cfg.Logger == nil {
 		srv.log = log.InitLogger(cfg.DebugMode)
@@ -52,13 +52,13 @@ func NewServer(cfg *ServerConfig) *Server {
 
 				if connected {
 
-					err := srv.Publisher.init(srv.con.con)
+					err := srv.publisher.init(srv.con.con)
 					if err != nil {
 						srv.log.Error(err)
 					}
 
 					for _, v := range srv.workers {
-						err = v.reconnect(srv.con.con)
+						err = v.Start(srv)
 						if err != nil {
 							srv.log.Error(err)
 						}
@@ -66,14 +66,14 @@ func NewServer(cfg *ServerConfig) *Server {
 
 				} else {
 
-					srv.Publisher.deactivate()
+					srv.publisher.deactivate()
 
 				}
 
 			case <-srv.startGlobalShutoff:
 				srv.log.Debug("Starting global shutoff: close publisher, stop workers consuming, wait for all tasks to be finished")
 
-				srv.Publisher.deactivate()
+				srv.publisher.deactivate()
 
 				wg := new(sync.WaitGroup)
 
@@ -83,12 +83,14 @@ func NewServer(cfg *ServerConfig) *Server {
 
 					go func(w *Worker, wg *sync.WaitGroup) {
 						defer wg.Done()
-						w.Close()
+						if w.working {
+							w.Close()
+						}
 					}(v, wg)
 
 				}
 
-				srv.log.Debug("Waiting for all worker to be done")
+				srv.log.Debug("Waiting for all workers to be done")
 				wg.Wait()
 				srv.log.Debug("All workers finished their tasks and were closed!")
 
@@ -98,13 +100,13 @@ func NewServer(cfg *ServerConfig) *Server {
 		}
 	}()
 
-	err := srv.Publisher.init(srv.con.con)
+	err := srv.publisher.init(srv.con.con)
 	if err != nil {
 		srv.log.Error(err)
 		return nil
 	}
 
-	if err = bootstrapExchanges(srv.Publisher.ch, cfg.InitExchanges); err != nil {
+	if err = bootstrapExchanges(srv.publisher.ch, cfg.InitExchanges); err != nil {
 		srv.log.Error(err)
 		return nil
 	}

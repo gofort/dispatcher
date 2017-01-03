@@ -41,7 +41,7 @@ func InitLogger(debug bool) *Logger {
 	l := new(Logger)
 
 	lg := logrus.New()
-	//lg.Hooks.Add(&CallerInfoHook{})
+	lg.Hooks.Add(&CallerInfoHook{})
 
 	if debug {
 		lg.Level = logrus.DebugLevel

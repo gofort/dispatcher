@@ -7,7 +7,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-type Publisher struct {
+type publisher struct {
 	log Log
 
 	ch               *amqp.Channel
@@ -18,7 +18,7 @@ type Publisher struct {
 	defaultRoutingKey string
 }
 
-func (s *Publisher) init(con *amqp.Connection) error {
+func (s *publisher) init(con *amqp.Connection) error {
 
 	s.log.Debug("Publisher initialization")
 
@@ -42,7 +42,7 @@ func (s *Publisher) init(con *amqp.Connection) error {
 	return nil
 }
 
-func (s *Publisher) deactivate() {
+func (s *publisher) deactivate() {
 
 	s.log.Debug("Deactivating publisher")
 
@@ -53,37 +53,45 @@ func (s *Publisher) deactivate() {
 
 }
 
-func (s *Publisher) PublishCustom(task *Task, exchange, routingKey string) error {
+func (s *publisher) PublishCustom(task *Task, exchange, routingKey string) error {
 
-	if task.Exchange == "" {
-		if exchange != "" {
-			task.Exchange = exchange
-		} else {
-			if s.defaultExchange != "" {
-				task.Exchange = s.defaultExchange
-			} else {
+	if exchange == "" {
+
+		if task.Exchange == "" {
+
+			if s.defaultExchange == "" {
 				return errors.New("No exchange passed")
+			} else {
+				task.Exchange = s.defaultExchange
 			}
+
 		}
+
+	} else {
+		task.Exchange = exchange
 	}
 
-	if task.RoutingKey == "" {
-		if routingKey != "" {
-			task.RoutingKey = routingKey
-		} else {
-			if s.defaultRoutingKey != "" {
-				task.RoutingKey = s.defaultRoutingKey
-			} else {
+	if routingKey == "" {
+
+		if task.RoutingKey == "" {
+
+			if s.defaultRoutingKey == "" {
 				return errors.New("No routing key passed")
+			} else {
+				task.RoutingKey = s.defaultRoutingKey
 			}
+
 		}
+
+	} else {
+		task.RoutingKey = routingKey
 	}
 
 	return s.publishTask(task)
 
 }
 
-func (s *Publisher) Publish(task *Task) error {
+func (s *publisher) Publish(task *Task) error {
 
 	if task.Exchange == "" {
 		if s.defaultExchange != "" {
@@ -105,7 +113,7 @@ func (s *Publisher) Publish(task *Task) error {
 
 }
 
-func (s *Publisher) publishTask(task *Task) error {
+func (s *publisher) publishTask(task *Task) error {
 
 	if task.UUID == "" {
 		task.UUID = uuid.NewV4().String()

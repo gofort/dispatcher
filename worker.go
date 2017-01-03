@@ -28,19 +28,26 @@ type TaskConfig struct {
 type Worker struct {
 	log Log // logger, which was taken from server instance
 
-	ch              *amqp.Channel        // channel which is used for messages consuming
-	stopConsume     chan bool            // channel which is used to stop consuming process
-	deliveries      <-chan amqp.Delivery // deliveries which worker is receiving
-	tasksInProgress *sync.WaitGroup      // wait group for waiting all tasks finishing when we close this worker
-	queue           string               // queue name which will be subscribed by this worker
+	ch               *amqp.Channel // channel which is used for messages consuming
+	stopConsume      chan struct{} // channel which is used to stop consuming process
+	consumingStopped chan struct{}
+	deliveries       <-chan amqp.Delivery // deliveries which worker is receiving
+	tasksInProgress  *sync.WaitGroup      // wait group for waiting all tasks finishing when we close this worker
+	queue            string               // queue name which will be subscribed by this worker
 
 	name  string // worker name, also used as consumer tag
 	limit int    // number of tasks which can be executed in parallel
 
 	tasks map[string]TaskConfig // tasks configurations, to know their timeouts and know if this worker should execute task
+
+	working bool // indicates if worker was started earlier
 }
 
 func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Worker, error) {
+
+	if !s.con.connected {
+		return nil, errors.New("Can't create new worker, because you are not connected to AMQP")
+	}
 
 	w := &Worker{
 		name:            cfg.Name,
@@ -48,7 +55,6 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 		tasks:           tasks,
 		limit:           cfg.Limit,
 		queue:           cfg.Queue,
-		stopConsume:     make(chan bool, 1),
 		tasksInProgress: new(sync.WaitGroup),
 	}
 
@@ -59,6 +65,7 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 		s.log.Errorf("Error during creating channel: %s", err)
 		return nil, err
 	}
+	defer w.ch.Close()
 
 	err = declareExchange(w.ch, cfg.Exchange)
 	if err != nil {
@@ -82,29 +89,41 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 
 	}
 
-	if err := w.ch.Qos(
-		cfg.Limit, // prefetch count
-		0,         // prefetch size
-		false,     // global
-	); err != nil {
-		w.log.Error(err)
-		return nil, err
-	}
-
-	if err := w.start(); err != nil {
-		w.log.Error(err)
-		return nil, err
-	}
-
 	s.workers[cfg.Name] = w
 
 	return w, nil
 
 }
 
-func (w *Worker) start() error {
+func (w *Worker) Start(s *Server) error {
+
+	if !s.con.connected {
+		return errors.New("Can't start worker, because you are not connected to AMQP")
+	}
+
+	if w.working {
+		return errors.New("Worker is already started")
+	}
+
+	w.working = true
+
+	w.stopConsume = make(chan struct{})
+	w.consumingStopped = make(chan struct{})
 
 	var err error
+
+	w.ch, err = s.con.con.Channel()
+	if err != nil {
+		return fmt.Errorf("Error during creating channel for worker: %s", err)
+	}
+
+	if err := w.ch.Qos(
+		w.limit, // prefetch count
+		0,       // prefetch size
+		false,   // global
+	); err != nil {
+		return fmt.Errorf("Error during setting QoS for worker's channel: %v", err)
+	}
 
 	w.deliveries, err = w.ch.Consume(
 		w.queue, // queue
@@ -116,8 +135,7 @@ func (w *Worker) start() error {
 		nil,     // arguments
 	)
 	if err != nil {
-		w.log.Error(err)
-		return err
+		return fmt.Errorf("Error during initialization queue consuming: %v", err)
 	}
 
 	go w.consume(w.deliveries)
@@ -136,94 +154,82 @@ func (w *Worker) consume(deliveries <-chan amqp.Delivery) {
 		case <-w.stopConsume:
 
 			w.log.Debug("Consuming stopped")
+
+			w.consumingStopped <- struct{}{}
+
 			return
 
 		case d := <-deliveries:
 
 			if len(d.Body) == 0 {
 
-				if err := d.Nack(false, false); err != nil {
-					w.log.Errorf("Consuming stopped: %v", err)
+				w.log.Error("Empty task received")
+
+				if er := d.Nack(false, false); er != nil {
+					w.log.Errorf("Consuming stopped: %v", er)
 					return
 				}
 
-				w.log.Error("Empty task received")
 				continue
+			}
+
+			var task Task
+			if err := json.Unmarshal(d.Body, &task); err != nil {
+
+				if er := d.Nack(false, false); er != nil {
+					w.log.Errorf("Consuming stopped: %v", er)
+					return
+				}
+
+				w.log.Errorf("%v, task body: %s", errors.New("Can't unmarshal received task"), string(d.Body))
+				continue
+			}
+
+			taskConfig, ok := w.tasks[task.Name]
+			if !ok {
+
+				if er := d.Nack(false, true); er != nil {
+					w.log.Errorf("Consuming stopped: %v", er)
+					return
+				}
+
+				w.log.Errorf("Consuming stopped: %v", errors.New("Received task which is not registered in this worker"))
+				return
 			}
 
 			w.tasksInProgress.Add(1)
 
-			go w.consumeOne(d)
+			go w.consumeOne(d, task, taskConfig)
 
 		}
 	}
 
 }
 
-func (w *Worker) reconnect(con *amqp.Connection) error {
-
-	w.log.Debugf("Worker '%s' reconnecting", w.name)
-
-	var err error
-
-	w.ch, err = con.Channel()
-	if err != nil {
-		return err
-	}
-
-	if err := w.ch.Qos(
-		w.limit, // prefetch count
-		0,       // prefetch size
-		false,   // global
-	); err != nil {
-		return err
-	}
-
-	w.stopConsume = make(chan bool)
-
-	if err := w.start(); err != nil {
-		return err
-	}
-
-	return nil
-
-}
-
 func (w *Worker) Close() {
 
-	w.log.Debug("Worker closing started")
+	w.log.Debugf("Worker %s closing started", w.name)
 
-	w.stopConsume <- true
+	w.working = false
+
+	w.stopConsume <- struct{}{}
+	close(w.stopConsume)
+
+	<-w.consumingStopped
+	close(w.consumingStopped)
 
 	w.tasksInProgress.Wait()
 
 	w.ch.Close()
 
-	w.log.Debug("Worker is closed")
+	w.log.Debugf("Worker %s is closed", w.name)
 
 }
 
-func (w *Worker) consumeOne(d amqp.Delivery) {
+func (w *Worker) consumeOne(d amqp.Delivery, task Task, taskConfig TaskConfig) {
 	defer w.tasksInProgress.Done()
 
-	// TODO Rethink this part
-
 	var err error
-
-	var task Task
-	if err := json.Unmarshal(d.Body, &task); err != nil {
-
-		d.Nack(false, false)
-
-		w.log.Error(errors.New("Can't unmarshal received task"))
-		return
-	}
-
-	taskConfig, ok := w.tasks[task.Name]
-	if !ok {
-		d.Nack(false, true)
-		return
-	}
 
 	w.log.Debugf("Handling task %s", task.UUID)
 
@@ -236,7 +242,10 @@ func (w *Worker) consumeOne(d amqp.Delivery) {
 		return
 	}
 
-	tryCall(reflectedTaskFunction, reflectedTaskArgs, taskConfig.TimeoutSeconds)
+	timeouted := tryCall(reflectedTaskFunction, reflectedTaskArgs, taskConfig.TimeoutSeconds)
+	if timeouted {
+		w.log.Debugf("Task %s was finished by timeout", task.UUID)
+	}
 
 	d.Ack(false)
 
@@ -256,7 +265,7 @@ func reflectArgs(args []TaskArgument) ([]reflect.Value, error) {
 	return argValues, nil
 }
 
-func tryCall(f reflect.Value, args []reflect.Value, timeoutSeconds int64) {
+func tryCall(f reflect.Value, args []reflect.Value, timeoutSeconds int64) bool {
 
 	defer func() {
 		if e := recover(); e != nil {
@@ -266,7 +275,7 @@ func tryCall(f reflect.Value, args []reflect.Value, timeoutSeconds int64) {
 
 	if timeoutSeconds == 0 {
 		f.Call(args)
-		return
+		return false
 	}
 
 	timer := time.NewTimer(time.Second * time.Duration(timeoutSeconds))
@@ -278,9 +287,10 @@ func tryCall(f reflect.Value, args []reflect.Value, timeoutSeconds int64) {
 
 	select {
 	case <-timer.C:
-
+		return true
 	case <-resultsChan:
+
 	}
 
-	return
+	return false
 }

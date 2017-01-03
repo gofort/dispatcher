@@ -23,6 +23,10 @@ func main() {
 						Name:        "queue_1",
 						BindingKeys: []string{"routing_key_1"},
 					},
+					dispatcher.Queue{
+						Name:        "queue_2",
+						BindingKeys: []string{"routing_key_2"},
+					},
 				},
 			},
 		},
@@ -41,10 +45,12 @@ func main() {
 	// 500 messages for 1 second if common channel for all publishers and every publish in goroutine
 	// 500 messages for 1 second if new channel for every delivery and every publish in goroutine
 
-	for i := 0; i < 15; i++ {
-		server.Publish(tasks.Test1Task())
-		server.Publish(tasks.Test2Task())
-		server.Publish(tasks.Test3Task())
+	for i := 0; i < 100; i++ {
+		server.PublishCustom(tasks.Test1Task(), "", "routing_key_1")
+		server.PublishCustom(tasks.Test2Task(), "", "routing_key_2")
+		server.PublishCustom(tasks.Test3Task(), "", "routing_key_1")
+		server.PublishCustom(tasks.Test4Task(), "", "routing_key_1")
+		server.PublishCustom(tasks.Test5Task(), "", "routing_key_2")
 	}
 
 }
