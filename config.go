@@ -4,7 +4,7 @@ import "crypto/tls"
 
 type ServerConfig struct {
 	AMQPConnectionString        string
-	ReconnectionRetries         int // TODO If 0 - close all workers immediately (every worker should have chan)
+	ReconnectionRetries         int
 	ReconnectionIntervalSeconds int64
 	TLSConfig                   *tls.Config
 	SecureConnection            bool

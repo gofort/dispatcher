@@ -49,6 +49,10 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 		return nil, errors.New("Can't create new worker, because you are not connected to AMQP")
 	}
 
+	if _, ok := s.workers[cfg.Name]; ok {
+		return nil, errors.New("Worker with the same name already exists")
+	}
+
 	w := &Worker{
 		name:            cfg.Name,
 		log:             s.log,
@@ -210,6 +214,10 @@ func (w *Worker) Close() {
 
 	w.log.Debugf("Worker %s closing started", w.name)
 
+	if !w.working {
+		return
+	}
+
 	w.working = false
 
 	w.stopConsume <- struct{}{}
@@ -244,7 +252,7 @@ func (w *Worker) consumeOne(d amqp.Delivery, task Task, taskConfig TaskConfig) {
 
 	timeouted := tryCall(reflectedTaskFunction, reflectedTaskArgs, taskConfig.TimeoutSeconds)
 	if timeouted {
-		w.log.Infof("Task %s was finished by timeout", task.UUID)
+		w.log.Infof("Task %s exceeded timeout, taking next task", task.UUID)
 	} else {
 		w.log.Infof("Task %s was finished", task.UUID)
 	}

@@ -4,6 +4,11 @@
 	"GodepVersion": "v75",
 	"Deps": [
 		{
+			"ImportPath": "github.com/satori/go.uuid",
+			"Comment": "v1.1.0-6-gb061729",
+			"Rev": "b061729afc07e77a8aa4fad0a2fd840958f1942a"
+		},
+		{
 			"ImportPath": "github.com/sirupsen/logrus",
 			"Comment": "v0.11.0-25-g881bee4",
 			"Rev": "881bee4e20a5d11a6a88a5667c6f292072ac1963"
