@@ -66,20 +66,20 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 
 	w.ch, err = s.con.con.Channel()
 	if err != nil {
-		s.log.Errorf("Error during creating channel: %s", err)
+		s.log.Errorf("Error during creating channel: %v", err)
 		return nil, err
 	}
 	defer w.ch.Close()
 
 	err = declareExchange(w.ch, cfg.Exchange)
 	if err != nil {
-		s.log.Error("Error during declaring exchange: %s", err)
+		s.log.Errorf("Error during declaring exchange: %v", err)
 		return nil, err
 	}
 
 	err = declareQueue(w.ch, cfg.Queue)
 	if err != nil {
-		s.log.Errorf("Error during declaring queue: %s", err)
+		s.log.Errorf("Error during declaring queue: %v", err)
 		return nil, err
 	}
 
@@ -87,7 +87,7 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 
 		err = queueBind(w.ch, cfg.Exchange, cfg.Queue, k)
 		if err != nil {
-			s.log.Errorf("Error during binding queue: %s", err)
+			s.log.Errorf("Error during binding queue: %v", err)
 			return nil, err
 		}
 
@@ -118,7 +118,7 @@ func (w *Worker) Start(s *Server) error {
 
 	w.ch, err = s.con.con.Channel()
 	if err != nil {
-		return fmt.Errorf("Error during creating channel for worker: %s", err)
+		return fmt.Errorf("Error during creating channel for worker: %v", err)
 	}
 
 	if err := w.ch.Qos(
