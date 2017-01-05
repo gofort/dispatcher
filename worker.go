@@ -20,6 +20,10 @@ type WorkerConfig struct {
 	Name        string
 }
 
+// Task config is a struct which needs for task registration in worker.
+// Contains function which will be called by worker and timeout.
+// Timeout is needed in case your task executing for about half an hour but you expected only 1 minute.
+// When timeout exceeded next task will be taken, but that old task will not be stopped.
 type TaskConfig struct {
 	TimeoutSeconds int64
 	Function       interface{}

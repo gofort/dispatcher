@@ -28,7 +28,7 @@ type Task struct {
 //  }
 //
 // Function:
-// func (myInt int, myAwesomeString string) error {}
+//   func (myInt int, myAwesomeString string) error {}
 //
 // Types which can be used: bool, string, int int8 int16 int32 int64, uint uint8 uint16 uint32 uint64, float32 float64
 type TaskArgument struct {
