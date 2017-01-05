@@ -197,8 +197,8 @@ func (w *Worker) consume(deliveries <-chan amqp.Delivery) {
 					return
 				}
 
-				w.log.Errorf("Consuming stopped: %v", errors.New("Received task which is not registered in this worker"))
-				return
+				w.log.Errorf("Received task (%s-%s) which is not registered in this worker, task was requeued, but somebody should take it from this queue in other case error will be retried", task.Name, task.UUID)
+				continue
 			}
 
 			w.tasksInProgress.Add(1)
