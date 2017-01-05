@@ -6,6 +6,8 @@ import (
 	"sync"
 )
 
+// Server contains AMQP connection and creates publisher.
+// Server is a parent of workers and publisher.
 type Server struct {
 	con                *amqpConnection
 	notifyConnected    chan bool
@@ -17,6 +19,7 @@ type Server struct {
 	// TODO Task UUID as first argument?
 }
 
+// NewServer creates new server from config and connects to AMQP.
 func NewServer(cfg *ServerConfig) *Server {
 
 	srv := &Server{
@@ -115,6 +118,7 @@ func NewServer(cfg *ServerConfig) *Server {
 
 }
 
+// GetWorkerByName returns a pointer to a Worker by its name.
 func (s *Server) GetWorkerByName(name string) (*Worker, error) {
 
 	worker, ok := s.workers[name]
@@ -126,6 +130,11 @@ func (s *Server) GetWorkerByName(name string) (*Worker, error) {
 
 }
 
+// Close is a complicated function which handles graceful quit of everything which dispatcher
+// has (workers, publisher and connection).
+// At first it stops reconnection process, then it closes publisher, after this it closes all
+// workers and waits until all of them will finish their tasks and closes their channels.
+// After all of this it closes AMQP connection.
 func (s *Server) Close() {
 	s.con.stopReconnecting <- struct{}{}
 	s.con.close(s.log, s.startGlobalShutoff)

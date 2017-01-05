@@ -53,6 +53,9 @@ func (s *publisher) deactivate() {
 
 }
 
+// This method is used for publishing tasks to certain exchanges and with certain routing keys.
+// If passed exchange is empty - task exchange will be taken, if it is empty too - default exchange will be used.
+// Behaviour with routing key is the same as with exchange.
 func (s *publisher) PublishCustom(task *Task, exchange, routingKey string) error {
 
 	if exchange == "" {
@@ -91,6 +94,9 @@ func (s *publisher) PublishCustom(task *Task, exchange, routingKey string) error
 
 }
 
+// This method is used for publishing tasks with default values.
+// If task exchange is empty - default exchange will be taken.
+// Behaviour with routing key is the same as with exchange.
 func (s *publisher) Publish(task *Task) error {
 
 	if task.Exchange == "" {
