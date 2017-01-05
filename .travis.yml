@@ -1,6 +1,8 @@
 ---
 language: go
 
+sudo: false
+
 go:
   - 1.7
 
@@ -11,5 +13,9 @@ branches:
   only:
     - master
 
+before_install:
+  - go get github.com/mattn/goveralls
+
 script:
-  - go test -v
+  - go test -covermode=count -coverprofile=profile.cov
+  - goveralls -coverprofile=profile.cov -service=travis-ci
