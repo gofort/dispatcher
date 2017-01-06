@@ -37,3 +37,12 @@ func queueBind(ch *amqp.Channel, exchange, queue, bindingKey string) error {
 		amqp.Table(map[string]interface{}{}),
 	)
 }
+
+func publishMessage(ch *amqp.Channel, exchange, routingKey string, headers map[string]interface{}, msg []byte) error {
+	return ch.Publish(exchange, routingKey, false, false, amqp.Publishing{
+		Headers:      amqp.Table(headers),
+		ContentType:  "application/json",
+		Body:         msg,
+		DeliveryMode: amqp.Persistent,
+	})
+}

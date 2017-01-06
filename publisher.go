@@ -140,13 +140,7 @@ func (s *publisher) publishTask(task *Task) error {
 		return errors.New("Service is disconnected")
 	}
 
-	err = s.ch.Publish(task.Exchange, task.RoutingKey, false, false, amqp.Publishing{
-		Headers:      amqp.Table(task.Headers),
-		ContentType:  "application/json",
-		Body:         msg,
-		DeliveryMode: amqp.Persistent,
-	})
-	if err != nil {
+	if err := publishMessage(s.ch, task.Exchange, task.RoutingKey, task.Headers, msg); err != nil {
 		return err
 	}
 

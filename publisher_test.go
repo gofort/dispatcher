@@ -9,11 +9,11 @@ import (
 	"testing"
 )
 
-const publisherExchange = "dispatcher_test"
-const publisherQueue = "test_queue"
-const publisherRoutingKey = "test_rk_1"
+const publisherTestExchange = "dispatcher_test"
+const publisherTestQueue = "test_queue"
+const publisherTestRoutingKey = "test_rk_1"
 
-func createPublisherEnv() (*amqp.Connection, *publisher, error) {
+func createPublisherTestEnv() (*amqp.Connection, *publisher, error) {
 
 	p := &publisher{
 		log: log.InitLogger(true),
@@ -30,26 +30,26 @@ func createPublisherEnv() (*amqp.Connection, *publisher, error) {
 	}
 	defer ch.Close()
 
-	if err := declareExchange(ch, publisherExchange); err != nil {
+	if err := declareExchange(ch, publisherTestExchange); err != nil {
 		return nil, nil, err
 	}
 
-	if err := declareQueue(ch, publisherQueue); err != nil {
+	if err := declareQueue(ch, publisherTestQueue); err != nil {
 		return nil, nil, err
 	}
 
-	if err := queueBind(ch, publisherExchange, publisherQueue, publisherRoutingKey); err != nil {
+	if err := queueBind(ch, publisherTestExchange, publisherTestQueue, publisherTestRoutingKey); err != nil {
 		return nil, nil, err
 	}
 
 	return con, p, nil
 }
 
-func destroyPublisherEnv(con *amqp.Connection, p *publisher) {
+func destroyPublisherTestEnv(con *amqp.Connection, p *publisher) {
 
-	p.ch.ExchangeDelete(publisherExchange, false, false)
+	p.ch.ExchangeDelete(publisherTestExchange, false, false)
 
-	p.ch.QueueDelete(publisherQueue, false, false, false)
+	p.ch.QueueDelete(publisherTestQueue, false, false, false)
 
 	p.deactivate()
 
@@ -57,7 +57,7 @@ func destroyPublisherEnv(con *amqp.Connection, p *publisher) {
 
 }
 
-func newTask() *Task {
+func newPublisherTestTask() *Task {
 	return &Task{
 		UUID: uuid.NewV4().String(),
 		Name: "test_task_1",
@@ -68,29 +68,29 @@ func newTask() *Task {
 func TestPublisher_Publish(t *testing.T) {
 	as := assert.New(t)
 
-	con, p, err := createPublisherEnv()
+	con, p, err := createPublisherTestEnv()
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer destroyPublisherEnv(con, p)
+	defer destroyPublisherTestEnv(con, p)
 
-	p.defaultExchange = publisherExchange
-	p.defaultRoutingKey = publisherRoutingKey
+	p.defaultExchange = publisherTestExchange
+	p.defaultRoutingKey = publisherTestRoutingKey
 
 	if err = p.init(con); err != nil {
 		t.Error(err)
 		return
 	}
 
-	task := newTask()
+	task := newPublisherTestTask()
 
 	if err = p.Publish(task); err != nil {
 		t.Error(err)
 		return
 	}
 
-	q, err := p.ch.QueueInspect(publisherQueue)
+	q, err := p.ch.QueueInspect(publisherTestQueue)
 	if err != nil {
 		t.Error(err)
 		return
@@ -98,7 +98,7 @@ func TestPublisher_Publish(t *testing.T) {
 
 	as.Equal(1, q.Messages, "Number of messages in queue is not equal to 1")
 
-	deliveries, err := p.ch.Consume(publisherQueue, "test_consumer_1", true, false, false, false, nil)
+	deliveries, err := p.ch.Consume(publisherTestQueue, "test_consumer_1", true, false, false, false, nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -124,26 +124,26 @@ func TestPublisher_Publish(t *testing.T) {
 func TestPublisher_PublishCustom(t *testing.T) {
 	as := assert.New(t)
 
-	con, p, err := createPublisherEnv()
+	con, p, err := createPublisherTestEnv()
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer destroyPublisherEnv(con, p)
+	defer destroyPublisherTestEnv(con, p)
 
 	if err = p.init(con); err != nil {
 		t.Error(err)
 		return
 	}
 
-	task := newTask()
+	task := newPublisherTestTask()
 
-	if err = p.PublishCustom(task, publisherExchange, publisherRoutingKey); err != nil {
+	if err = p.PublishCustom(task, publisherTestExchange, publisherTestRoutingKey); err != nil {
 		t.Error(err)
 		return
 	}
 
-	q, err := p.ch.QueueInspect(publisherQueue)
+	q, err := p.ch.QueueInspect(publisherTestQueue)
 	if err != nil {
 		t.Error(err)
 		return
@@ -151,7 +151,7 @@ func TestPublisher_PublishCustom(t *testing.T) {
 
 	as.Equal(1, q.Messages, "Number of messages in queue is not equal to 1")
 
-	deliveries, err := p.ch.Consume(publisherQueue, "test_consumer_1", true, false, false, false, nil)
+	deliveries, err := p.ch.Consume(publisherTestQueue, "test_consumer_1", true, false, false, false, nil)
 	if err != nil {
 		t.Error(err)
 		return

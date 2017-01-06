@@ -23,24 +23,23 @@ import (
 // Binding keys - biding keys for queue which will be created.
 //
 // Name - worker name
-//
-// TaskUUIDAsFirstArg - makes task UUID as first argument of all tasks which this worker calls
 type WorkerConfig struct {
-	Limit              int
-	Exchange           string // required
-	Queue              string // required
-	BindingKeys        []string
-	Name               string // required
-	TaskUUIDAsFirstArg bool
+	Limit       int
+	Exchange    string // required
+	Queue       string // required
+	BindingKeys []string
+	Name        string // required
 }
 
 // TaskConfig is task configuration which is needed for task registration in worker.
 // Contains function which will be called by worker and timeout.
 // Timeout is needed in case your task executing for about half an hour but you expected only 1 minute.
 // When timeout exceeded next task will be taken, but that old task will not be stopped.
+// TaskUUIDAsFirstArg - makes task UUID as first argument of all tasks which this worker calls.
 type TaskConfig struct {
-	TimeoutSeconds int64
-	Function       interface{}
+	TimeoutSeconds     int64
+	Function           interface{}
+	TaskUUIDAsFirstArg bool
 }
 
 // Worker instance.
@@ -55,9 +54,8 @@ type Worker struct {
 	tasksInProgress  *sync.WaitGroup      // wait group for waiting all tasks finishing when we close this worker
 	queue            string               // queue name which will be subscribed by this worker
 
-	name               string // worker name, also used as consumer tag
-	limit              int    // number of tasks which can be executed in parallel
-	taskUUIDAsFirstArg bool
+	name  string // worker name, also used as consumer tag
+	limit int    // number of tasks which can be executed in parallel
 
 	tasks map[string]TaskConfig // tasks configurations, to know their timeouts and know if this worker should execute task
 
@@ -94,13 +92,12 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 	}
 
 	w := &Worker{
-		name:               cfg.Name,
-		log:                s.log,
-		tasks:              tasks,
-		limit:              cfg.Limit,
-		taskUUIDAsFirstArg: cfg.TaskUUIDAsFirstArg,
-		queue:              cfg.Queue,
-		tasksInProgress:    new(sync.WaitGroup),
+		name:            cfg.Name,
+		log:             s.log,
+		tasks:           tasks,
+		limit:           cfg.Limit,
+		queue:           cfg.Queue,
+		tasksInProgress: new(sync.WaitGroup),
 	}
 
 	var err error
@@ -149,6 +146,12 @@ func (w *Worker) Start(s *Server) error {
 		return errors.New("Can't start worker, because you are not connected to AMQP")
 	}
 
+	return w.init(s.con.con)
+
+}
+
+func (w *Worker) init(con *amqp.Connection) error {
+
 	if w.working {
 		return errors.New("Worker is already started")
 	}
@@ -160,7 +163,7 @@ func (w *Worker) Start(s *Server) error {
 
 	var err error
 
-	w.ch, err = s.con.con.Channel()
+	w.ch, err = con.Channel()
 	if err != nil {
 		return fmt.Errorf("Error during creating channel for worker: %v", err)
 	}
@@ -291,7 +294,7 @@ func (w *Worker) consumeOne(d amqp.Delivery, task Task, taskConfig TaskConfig) {
 
 	reflectedTaskFunction := reflect.ValueOf(taskConfig.Function)
 
-	if w.taskUUIDAsFirstArg {
+	if taskConfig.TaskUUIDAsFirstArg {
 
 		taskUUID := []TaskArgument{{"string", task.UUID}}
 
