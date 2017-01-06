@@ -16,11 +16,12 @@ type Server struct {
 	log     Log
 	workers map[string]*Worker
 	*publisher
-	// TODO Task UUID as first argument?
 }
 
 // NewServer creates new server from config and connects to AMQP.
-func NewServer(cfg *ServerConfig) *Server {
+func NewServer(cfg *ServerConfig) (*Server, chan struct{}) {
+
+	// TODO Check if connection string is not passed
 
 	srv := &Server{
 		publisher: &publisher{
@@ -50,7 +51,9 @@ func NewServer(cfg *ServerConfig) *Server {
 			"via exchange and routing key of task itself.")
 	}
 
-	go srv.con.initConnection(srv.log, cfg, srv.notifyConnected, srv.startGlobalShutoff)
+	connectionBroken := make(chan struct{})
+
+	go srv.con.initConnection(srv.log, cfg, srv.notifyConnected, srv.startGlobalShutoff, connectionBroken)
 
 	<-srv.notifyConnected
 
@@ -112,15 +115,15 @@ func NewServer(cfg *ServerConfig) *Server {
 	err := srv.publisher.init(srv.con.con)
 	if err != nil {
 		srv.log.Error(err)
-		return nil
+		return nil, nil
 	}
 
 	if err = bootstrapExchanges(srv.publisher.ch, cfg.InitExchanges); err != nil {
 		srv.log.Error(err)
-		return nil
+		return nil, nil
 	}
 
-	return srv
+	return srv, connectionBroken
 
 }
 

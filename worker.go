@@ -23,12 +23,15 @@ import (
 // Binding keys - biding keys for queue which will be created.
 //
 // Name - worker name
+//
+// TaskUUIDAsFirstArg - makes task UUID as first argument of all tasks which this worker calls
 type WorkerConfig struct {
-	Limit       int
-	Exchange    string // required
-	Queue       string // required
-	BindingKeys []string
-	Name        string // required
+	Limit              int
+	Exchange           string // required
+	Queue              string // required
+	BindingKeys        []string
+	Name               string // required
+	TaskUUIDAsFirstArg bool
 }
 
 // TaskConfig is task configuration which is needed for task registration in worker.
@@ -52,8 +55,9 @@ type Worker struct {
 	tasksInProgress  *sync.WaitGroup      // wait group for waiting all tasks finishing when we close this worker
 	queue            string               // queue name which will be subscribed by this worker
 
-	name  string // worker name, also used as consumer tag
-	limit int    // number of tasks which can be executed in parallel
+	name               string // worker name, also used as consumer tag
+	limit              int    // number of tasks which can be executed in parallel
+	taskUUIDAsFirstArg bool
 
 	tasks map[string]TaskConfig // tasks configurations, to know their timeouts and know if this worker should execute task
 
@@ -90,12 +94,13 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 	}
 
 	w := &Worker{
-		name:            cfg.Name,
-		log:             s.log,
-		tasks:           tasks,
-		limit:           cfg.Limit,
-		queue:           cfg.Queue,
-		tasksInProgress: new(sync.WaitGroup),
+		name:               cfg.Name,
+		log:                s.log,
+		tasks:              tasks,
+		limit:              cfg.Limit,
+		taskUUIDAsFirstArg: cfg.TaskUUIDAsFirstArg,
+		queue:              cfg.Queue,
+		tasksInProgress:    new(sync.WaitGroup),
 	}
 
 	var err error
@@ -285,6 +290,14 @@ func (w *Worker) consumeOne(d amqp.Delivery, task Task, taskConfig TaskConfig) {
 	w.log.Infof("Handling task %s", task.UUID)
 
 	reflectedTaskFunction := reflect.ValueOf(taskConfig.Function)
+
+	if w.taskUUIDAsFirstArg {
+
+		taskUUID := []TaskArgument{{"string", task.UUID}}
+
+		task.Args = append(taskUUID, task.Args...)
+
+	}
 
 	reflectedTaskArgs, err := reflectArgs(task.Args)
 	if err != nil {

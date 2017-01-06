@@ -14,7 +14,7 @@ type amqpConnection struct {
 	connected        bool             // If connection is alive - true, else - false
 }
 
-func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnected chan bool, startGlobalShutoff chan struct{}) {
+func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnected chan bool, startGlobalShutoff chan struct{}, connectionBroken chan struct{}) {
 
 	// TODO Think about refactor for counter := 0 ; ...
 	counter := 0
@@ -23,6 +23,8 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 
 		if counter == cfg.ReconnectionRetries+1 {
 			startGlobalShutoff <- struct{}{}
+			<-s.workersFinished
+			connectionBroken <- struct{}{}
 			return
 		}
 

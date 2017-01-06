@@ -9,7 +9,7 @@ type Task struct {
 	RoutingKey string                 `json:"routing_key"`
 	Exchange   string                 `json:"exchange"`
 	Args       []TaskArgument         `json:"args"`
-	Headers    map[string]interface{} `json:"headers"` // needed for AMQP
+	Headers    map[string]interface{} `json:"headers"`
 }
 
 // TaskArgument is an argument which will be passed to function.

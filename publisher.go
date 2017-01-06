@@ -109,7 +109,7 @@ func (s *publisher) Publish(task *Task) error {
 	}
 
 	if task.RoutingKey == "" {
-		if s.defaultRoutingKey != "" {
+		if s.defaultRoutingKey == "" {
 			return errors.New("No routing key passed")
 		}
 
