@@ -1,4 +1,4 @@
-// Package sort provides primitives for sorting slices and user-defined
+// Package dispatcher is an asynchronous task queue/job queue based on distributed message passing.
 package dispatcher
 
 import "crypto/tls"

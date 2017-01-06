@@ -31,7 +31,7 @@ type WorkerConfig struct {
 	Name        string // required
 }
 
-// Task config is a struct which needs for task registration in worker.
+// TaskConfig is task configuration which is needed for task registration in worker.
 // Contains function which will be called by worker and timeout.
 // Timeout is needed in case your task executing for about half an hour but you expected only 1 minute.
 // When timeout exceeded next task will be taken, but that old task will not be stopped.
@@ -60,7 +60,7 @@ type Worker struct {
 	working bool // indicates if worker was started earlier
 }
 
-// Creates new worker instance.
+// NewWorker creates new worker instance.
 // Takes WorkerConfig and map of TaskConfigs.
 // Map of TaskConfigs needs for task registration inside of this worker.
 func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Worker, error) {
@@ -135,7 +135,7 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 
 }
 
-// This function starts consuming of this worker.
+// Start function starts consuming of queue.
 // Needs server as an argument because only server contains AMQP connection and this function creates AMQP channel
 // for a worker from connection.
 func (w *Worker) Start(s *Server) error {
@@ -249,7 +249,7 @@ func (w *Worker) consume(deliveries <-chan amqp.Delivery) {
 
 }
 
-// Gracefully closes worker.
+// Close function gracefully closes worker.
 // At first this function stops worker consuming, then waits until all started by this worker tasks will be finished
 // after all of this it closes channel.
 // This function is also used by server close function for graceful quit of all workers.

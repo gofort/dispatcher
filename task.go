@@ -12,7 +12,7 @@ type Task struct {
 	Headers    map[string]interface{} `json:"headers"` // needed for AMQP
 }
 
-// Task arguments are arguments which will be passed to function.
+// TaskArgument is an argument which will be passed to function.
 // For example, task with such arguments will call the following function:
 //
 // Arguments:
