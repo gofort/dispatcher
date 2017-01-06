@@ -49,6 +49,8 @@ func destroyPublisherTestEnv(con *amqp.Connection, p *publisher) {
 
 	p.ch.ExchangeDelete(publisherTestExchange, false, false)
 
+	p.ch.QueueDelete(publisherTestExchange, false, false, false)
+
 	p.deactivate()
 
 	con.Close()

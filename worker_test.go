@@ -59,6 +59,8 @@ func destroyWorkerTestEnv(con *amqp.Connection) {
 
 	ch.ExchangeDelete(publisherTestExchange, false, false)
 
+	ch.QueueDelete(publisherTestExchange, false, false, false)
+
 	ch.Close()
 	con.Close()
 

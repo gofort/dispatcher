@@ -91,6 +91,8 @@ func TestNewServer(t *testing.T) {
 
 	ch2.ExchangeDelete(serverTestExchange, false, false)
 
+	ch2.QueueDelete(serverTestQueue, false, false, false)
+
 }
 
 func Test_ServerReconnecting(t *testing.T) {
@@ -163,5 +165,7 @@ func Test_ServerReconnecting(t *testing.T) {
 	defer ch2.Close()
 
 	ch2.ExchangeDelete(serverTestExchange, false, false)
+
+	ch2.QueueDelete(serverTestQueue, false, false, false)
 
 }
