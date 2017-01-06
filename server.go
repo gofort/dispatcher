@@ -21,8 +21,6 @@ type Server struct {
 // NewServer creates new server from config and connects to AMQP.
 func NewServer(cfg *ServerConfig) (*Server, chan struct{}) {
 
-	// TODO Check if connection string is not passed
-
 	srv := &Server{
 		publisher: &publisher{
 			defaultRoutingKey: cfg.DefaultPublishSettings.RoutingKey,

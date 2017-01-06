@@ -20,7 +20,6 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 		cfg.AMQPConnectionString = "amqp://guest:guest@localhost:5672/"
 	}
 
-	// TODO Think about refactor for counter := 0 ; ...
 	counter := 0
 
 	for {
