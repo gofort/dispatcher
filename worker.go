@@ -152,10 +152,6 @@ func (w *Worker) Start(s *Server) error {
 
 func (w *Worker) init(con *amqp.Connection) error {
 
-	if w.working {
-		return errors.New("Worker is already started")
-	}
-
 	w.working = true
 
 	w.stopConsume = make(chan struct{})

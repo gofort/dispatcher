@@ -138,6 +138,25 @@ func Test_ServerReconnecting(t *testing.T) {
 		return
 	}
 
+	w2, err := server.NewWorker(&WorkerConfig{
+		Limit:       6,
+		Exchange:    serverTestExchange,
+		Queue:       serverTestQueue,
+		BindingKeys: []string{serverTestRoutingKey1},
+		Name:        "test_worker_2",
+	}, make(map[string]TaskConfig))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err := w2.Start(server); err != nil {
+		t.Error(err)
+		return
+	}
+
+	time.Sleep(time.Second * 2)
+
 	server.con.con.Close()
 	time.Sleep(time.Second * 2)
 
@@ -156,6 +175,8 @@ func Test_ServerReconnecting(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond * 300)
 	}
+
+	w2.Close()
 
 	ch2, err := server.con.con.Channel()
 	if err != nil {

@@ -68,9 +68,11 @@ func NewServer(cfg *ServerConfig) (*Server, chan struct{}) {
 					}
 
 					for _, v := range srv.workers {
-						err = v.Start(srv)
-						if err != nil {
-							srv.log.Error(err)
+						if v.working {
+							err = v.Start(srv)
+							if err != nil {
+								srv.log.Error(err)
+							}
 						}
 					}
 
