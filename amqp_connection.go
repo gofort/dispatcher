@@ -34,7 +34,9 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 		if err != nil {
 			log.Error(err)
 			counter++
-			time.Sleep(time.Duration(cfg.ReconnectionIntervalSeconds) * time.Second)
+			if cfg.ReconnectionIntervalSeconds != 0 {
+				time.Sleep(time.Duration(cfg.ReconnectionIntervalSeconds) * time.Second)
+			}
 			continue
 		}
 

@@ -12,12 +12,23 @@ import (
 	"time"
 )
 
+// WorkerConfig is a configuration for new worker which you want to create.
+//
+// Limit - number of parallel tasks which will be executed.
+//
+// Exchange - name of exchange which worker will use.
+//
+// Queue - name of queue which worker will consume.
+//
+// Binding keys - biding keys for queue which will be created.
+//
+// Name - worker name
 type WorkerConfig struct {
 	Limit       int
-	Exchange    string
-	Queue       string
+	Exchange    string // required
+	Queue       string // required
 	BindingKeys []string
-	Name        string
+	Name        string // required
 }
 
 // Task config is a struct which needs for task registration in worker.
@@ -29,12 +40,14 @@ type TaskConfig struct {
 	Function       interface{}
 }
 
+// Worker instance.
+// Consists of channel which consume queue.
 type Worker struct {
 	log Log // logger, which was taken from server instance
 
-	ch               *amqp.Channel // channel which is used for messages consuming
-	stopConsume      chan struct{} // channel which is used to stop consuming process
-	consumingStopped chan struct{}
+	ch               *amqp.Channel        // channel which is used for messages consuming
+	stopConsume      chan struct{}        // channel which is used to stop consuming process
+	consumingStopped chan struct{}        // channel which notifies that consuming stopped
 	deliveries       <-chan amqp.Delivery // deliveries which worker is receiving
 	tasksInProgress  *sync.WaitGroup      // wait group for waiting all tasks finishing when we close this worker
 	queue            string               // queue name which will be subscribed by this worker
@@ -47,10 +60,29 @@ type Worker struct {
 	working bool // indicates if worker was started earlier
 }
 
+// Creates new worker instance.
+// Takes WorkerConfig and map of TaskConfigs.
+// Map of TaskConfigs needs for task registration inside of this worker.
 func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Worker, error) {
 
 	if !s.con.connected {
 		return nil, errors.New("Can't create new worker, because you are not connected to AMQP")
+	}
+
+	if cfg.Name == "" {
+		return nil, errors.New("Worker name is required parameter")
+	}
+
+	if cfg.Limit == 0 {
+		cfg.Limit = 3
+	}
+
+	if cfg.Exchange == "" {
+		return nil, errors.New("Worker exchange is required parameter")
+	}
+
+	if cfg.Queue == "" {
+		return nil, errors.New("Worker queue is required parameter")
 	}
 
 	if _, ok := s.workers[cfg.Name]; ok {
@@ -103,6 +135,9 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 
 }
 
+// This function starts consuming of this worker.
+// Needs server as an argument because only server contains AMQP connection and this function creates AMQP channel
+// for a worker from connection.
 func (w *Worker) Start(s *Server) error {
 
 	if !s.con.connected {
@@ -214,6 +249,10 @@ func (w *Worker) consume(deliveries <-chan amqp.Delivery) {
 
 }
 
+// Gracefully closes worker.
+// At first this function stops worker consuming, then waits until all started by this worker tasks will be finished
+// after all of this it closes channel.
+// This function is also used by server close function for graceful quit of all workers.
 func (w *Worker) Close() {
 
 	w.log.Debugf("Worker %s closing started", w.name)
