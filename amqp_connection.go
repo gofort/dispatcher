@@ -16,6 +16,10 @@ type amqpConnection struct {
 
 func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnected chan bool, startGlobalShutoff chan struct{}, connectionBroken chan struct{}) {
 
+	if cfg.AMQPConnectionString == "" {
+		cfg.AMQPConnectionString = "amqp://guest:guest@localhost:5672/"
+	}
+
 	// TODO Think about refactor for counter := 0 ; ...
 	counter := 0
 
