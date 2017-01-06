@@ -2,6 +2,7 @@ package dispatcher
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/gofort/dispatcher/log"
 	"github.com/satori/go.uuid"
 	"github.com/streadway/amqp"
@@ -137,7 +138,15 @@ func TestPublisher_PublishCustom(t *testing.T) {
 	}
 
 	task := newPublisherTestTask()
+	task.UUID = ""
+	task.Name = ""
 
+	if err = p.PublishCustom(task, publisherTestExchange, publisherTestRoutingKey); err == nil {
+		t.Error(errors.New("Task name was empty, error expected"))
+		return
+	}
+
+	task.Name = "test_task_1"
 	if err = p.PublishCustom(task, publisherTestExchange, publisherTestRoutingKey); err != nil {
 		t.Error(err)
 		return
