@@ -22,17 +22,12 @@ type Server struct {
 // NewServer creates new server from config and connects to AMQP.
 func NewServer(cfg *ServerConfig) *Server {
 
-	if cfg.AMQPConnectionString == "" {
-		cfg.AMQPConnectionString = "amqp://guest:guest@localhost:5672/"
-	}
-
 	srv := &Server{
 		publisher: &publisher{
 			defaultRoutingKey: cfg.DefaultPublishSettings.RoutingKey,
 			defaultExchange:   cfg.DefaultPublishSettings.Exchange,
 		},
 		startGlobalShutoff: make(chan struct{}),
-		log:                log.InitLogger(cfg.DebugMode),
 		notifyConnected:    make(chan bool),
 		workers:            make(map[string]*Worker),
 		con: &amqpConnection{
@@ -40,13 +35,14 @@ func NewServer(cfg *ServerConfig) *Server {
 			stopReconnecting: make(chan struct{}),
 		},
 	}
-	srv.publisher.log = srv.log
 
 	if cfg.Logger == nil {
 		srv.log = log.InitLogger(cfg.DebugMode)
 	} else {
 		srv.log = cfg.Logger
 	}
+
+	srv.publisher.log = srv.log
 
 	if cfg.DefaultPublishSettings.Exchange == "" || cfg.DefaultPublishSettings.RoutingKey == "" {
 		srv.log.Info("You havn't passed default exchange or default routing key for publisher in config. " +

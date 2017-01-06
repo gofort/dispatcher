@@ -64,9 +64,9 @@ func (s *publisher) PublishCustom(task *Task, exchange, routingKey string) error
 
 			if s.defaultExchange == "" {
 				return errors.New("No exchange passed")
-			} else {
-				task.Exchange = s.defaultExchange
 			}
+
+			task.Exchange = s.defaultExchange
 
 		}
 
@@ -80,9 +80,9 @@ func (s *publisher) PublishCustom(task *Task, exchange, routingKey string) error
 
 			if s.defaultRoutingKey == "" {
 				return errors.New("No routing key passed")
-			} else {
-				task.RoutingKey = s.defaultRoutingKey
 			}
+
+			task.RoutingKey = s.defaultRoutingKey
 
 		}
 
@@ -100,19 +100,21 @@ func (s *publisher) PublishCustom(task *Task, exchange, routingKey string) error
 func (s *publisher) Publish(task *Task) error {
 
 	if task.Exchange == "" {
-		if s.defaultExchange != "" {
-			task.Exchange = s.defaultExchange
-		} else {
+		if s.defaultExchange == "" {
 			return errors.New("No exchange passed")
 		}
+
+		task.Exchange = s.defaultExchange
+
 	}
 
 	if task.RoutingKey == "" {
 		if s.defaultRoutingKey != "" {
-			task.RoutingKey = s.defaultRoutingKey
-		} else {
 			return errors.New("No routing key passed")
 		}
+
+		task.RoutingKey = s.defaultRoutingKey
+
 	}
 
 	return s.publishTask(task)

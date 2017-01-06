@@ -4,12 +4,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Default dispatcher logger which is a wrapper around logrus.
+// Logger is default dispatcher logger which is a wrapper around logrus.
 type Logger struct {
 	log *logrus.Entry
 }
 
-// Creates new logger instance.
+// InitLogger creates new logger instance.
 // Adds logrus field: source=dispatcher.
 func InitLogger(debug bool) *Logger {
 
@@ -27,32 +27,32 @@ func InitLogger(debug bool) *Logger {
 
 }
 
-// Interesting runtime events (startup/shutdown). Expect these to be immediately visible on a console, so be conservative and keep to a minimum.
+// Info needs for logging interesting runtime events (startup/shutdown). Expect these to be immediately visible on a console, so be conservative and keep to a minimum.
 func (l *Logger) Info(args ...interface{}) {
 	l.log.Info(args)
 }
 
-// Interesting runtime events (startup/shutdown). Expect these to be immediately visible on a console, so be conservative and keep to a minimum.
+// Infof needs for logging interesting runtime events (startup/shutdown). Expect these to be immediately visible on a console, so be conservative and keep to a minimum.
 func (l *Logger) Infof(format string, args ...interface{}) {
 	l.log.Infof(format, args)
 }
 
-// Detailed information on flow of through the system. Expect these to be written to logs only.
+// Debug needs for logging detailed information on flow of through the system. Expect these to be written to logs only.
 func (l *Logger) Debug(args ...interface{}) {
 	l.log.Debug(args)
 }
 
-// Detailed information on flow of through the system. Expect these to be written to logs only.
+// Debugf needs for logging detailed information on flow of through the system. Expect these to be written to logs only.
 func (l *Logger) Debugf(format string, args ...interface{}) {
 	l.log.Debugf(format, args)
 }
 
-// Other runtime errors or unexpected conditions. Expect these to be immediately visible on a status console.
+// Error needs for logging other runtime errors or unexpected conditions. Expect these to be immediately visible on a status console.
 func (l *Logger) Error(args ...interface{}) {
 	l.log.Error(args)
 }
 
-// Other runtime errors or unexpected conditions. Expect these to be immediately visible on a status console.
+// Errorf needs for logging other runtime errors or unexpected conditions. Expect these to be immediately visible on a status console.
 func (l *Logger) Errorf(format string, args ...interface{}) {
 	l.log.Errorf(format, args)
 }

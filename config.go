@@ -3,7 +3,7 @@ package dispatcher
 
 import "crypto/tls"
 
-// Server configuration which needs for server creation.
+// ServerConfig is a configuration which needs for server creation.
 //
 // AMQPConnectionString example: amqp://guest:guest@localhost:5672/
 //
@@ -32,7 +32,7 @@ type ServerConfig struct {
 	Logger                      Log
 }
 
-// Default settings for server's publishing methods.
+// PublishSettings is default settings for server's publishing methods.
 // Pass exchange and routing key which will be used by dispatcher by default.
 type PublishSettings struct {
 	Exchange   string

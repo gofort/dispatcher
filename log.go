@@ -1,6 +1,6 @@
 package dispatcher
 
-// Interface of logger which is used in dispatcher.
+// Log is an interface of logger which is used in dispatcher.
 // By default dispatcher uses logrus.
 // You can pass your own logger which fits this interface to dispatcher in server config.
 type Log interface {
