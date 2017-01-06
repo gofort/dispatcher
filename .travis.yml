@@ -17,4 +17,4 @@ before_install:
   - go get github.com/mattn/goveralls
 
 script:
-  - goveralls -v -service=travis-ci -ignore="examples"
+  - goveralls -v -service=travis-ci -ignore="examples/worker/worker.go,examples/sender/sender.go"
