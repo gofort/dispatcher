@@ -18,4 +18,3 @@ before_install:
 
 script:
   - go test -v
-  - goveralls -v -service=travis-ci -ignore="examples/worker/worker.go,examples/sender/sender.go"
