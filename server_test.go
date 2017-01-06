@@ -1,6 +1,7 @@
 package dispatcher
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -23,6 +24,7 @@ func TestNewServer(t *testing.T) {
 	}
 
 	server, _ := NewServer(&cfg)
+	defer server.Close()
 
 	for {
 		if server.con.connected {
@@ -56,6 +58,30 @@ func TestNewServer(t *testing.T) {
 		time.Sleep(time.Millisecond * 300)
 	}
 
+	_, err := server.NewWorker(&WorkerConfig{
+		Limit:       5,
+		Exchange:    serverTestExchange,
+		Queue:       serverTestQueue,
+		BindingKeys: []string{serverTestRoutingKey1},
+		Name:        "test_worker_1",
+	}, make(map[string]TaskConfig))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	_, err = server.GetWorkerByName("test_worker_1")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	_, err = server.GetWorkerByName("test_worker_2")
+	if err == nil {
+		t.Error(errors.New("GetWorkerByName returned worker which doesn't exist"))
+		return
+	}
+
 	ch2, err := server.con.con.Channel()
 	if err != nil {
 		t.Error(err)
@@ -66,8 +92,5 @@ func TestNewServer(t *testing.T) {
 	ch2.ExchangeDelete(serverTestExchange, false, false)
 
 	ch2.QueueDelete(serverTestQueue, false, false, false)
-
-	server.Close()
-	t.Log("Server is closed")
 
 }
