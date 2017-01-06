@@ -53,75 +53,12 @@ func (s *publisher) deactivate() {
 
 }
 
-// This method is used for publishing tasks to certain exchanges and with certain routing keys.
-// If passed exchange is empty - task exchange will be taken, if it is empty too - default exchange will be used.
-// Behaviour with routing key is the same as with exchange.
-func (s *publisher) PublishCustom(task *Task, exchange, routingKey string) error {
-
-	if exchange == "" {
-
-		if task.Exchange == "" {
-
-			if s.defaultExchange == "" {
-				return errors.New("No exchange passed")
-			}
-
-			task.Exchange = s.defaultExchange
-
-		}
-
-	} else {
-		task.Exchange = exchange
-	}
-
-	if routingKey == "" {
-
-		if task.RoutingKey == "" {
-
-			if s.defaultRoutingKey == "" {
-				return errors.New("No routing key passed")
-			}
-
-			task.RoutingKey = s.defaultRoutingKey
-
-		}
-
-	} else {
-		task.RoutingKey = routingKey
-	}
-
-	return s.publishTask(task)
-
-}
-
-// This method is used for publishing tasks with default values.
-// If task exchange is empty - default exchange will be taken.
-// Behaviour with routing key is the same as with exchange.
+// Publish method is used for publishing tasks.
 func (s *publisher) Publish(task *Task) error {
 
-	if task.Exchange == "" {
-		if s.defaultExchange == "" {
-			return errors.New("No exchange passed")
-		}
-
-		task.Exchange = s.defaultExchange
-
-	}
-
 	if task.RoutingKey == "" {
-		if s.defaultRoutingKey == "" {
-			return errors.New("No routing key passed")
-		}
-
 		task.RoutingKey = s.defaultRoutingKey
-
 	}
-
-	return s.publishTask(task)
-
-}
-
-func (s *publisher) publishTask(task *Task) error {
 
 	if task.UUID == "" {
 		task.UUID = uuid.NewV4().String()
@@ -140,7 +77,7 @@ func (s *publisher) publishTask(task *Task) error {
 		return errors.New("Service is disconnected")
 	}
 
-	if err := publishMessage(s.ch, task.Exchange, task.RoutingKey, task.Headers, msg); err != nil {
+	if err := publishMessage(s.ch, s.defaultExchange, task.RoutingKey, task.Headers, msg); err != nil {
 		return err
 	}
 
@@ -151,4 +88,5 @@ func (s *publisher) publishTask(task *Task) error {
 	}
 
 	return errors.New("Failed to deliver message")
+
 }

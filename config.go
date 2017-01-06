@@ -15,9 +15,9 @@ import "crypto/tls"
 //
 // DebugMode - if true, enables debug level in logger (by default dispatcher uses logrus and this option enables debug level in it, if you use your own logger, omit this option).
 //
-// InitExchanges - pass exchanges, queues and binding keys to this field and server will create all of them.
+// InitQueues - pass queues and binding keys to this field and server will create all of them if they don't exists.
 //
-// DefaultPublishSettings - default exchange and routing key for publishing messages.
+// DefaultRoutingKey - default routing key for publishing messages.
 //
 // Logger - custom logger if you don't want to use dispatcher's default logrus.
 type ServerConfig struct {
@@ -27,23 +27,10 @@ type ServerConfig struct {
 	TLSConfig                   *tls.Config
 	SecureConnection            bool
 	DebugMode                   bool // for default logger only
-	InitExchanges               []Exchange
-	DefaultPublishSettings      PublishSettings
+	InitQueues                  []Queue
+	Exchange                    string // required
+	DefaultRoutingKey           string // required
 	Logger                      Log
-}
-
-// PublishSettings is default settings for server's publishing methods.
-// Pass exchange and routing key which will be used by dispatcher by default.
-type PublishSettings struct {
-	Exchange   string
-	RoutingKey string
-}
-
-// Exchange for creating during server creation.
-// Has name and queues in it.
-type Exchange struct {
-	Name   string
-	Queues []Queue
 }
 
 // Queue for creating during server creation.

@@ -19,12 +19,12 @@ type Server struct {
 }
 
 // NewServer creates new server from config and connects to AMQP.
-func NewServer(cfg *ServerConfig) (*Server, chan struct{}) {
+func NewServer(cfg *ServerConfig) (*Server, chan struct{}, error) {
 
 	srv := &Server{
 		publisher: &publisher{
-			defaultRoutingKey: cfg.DefaultPublishSettings.RoutingKey,
-			defaultExchange:   cfg.DefaultPublishSettings.Exchange,
+			defaultRoutingKey: cfg.DefaultRoutingKey,
+			defaultExchange:   cfg.Exchange,
 		},
 		startGlobalShutoff: make(chan struct{}),
 		notifyConnected:    make(chan bool),
@@ -35,6 +35,14 @@ func NewServer(cfg *ServerConfig) (*Server, chan struct{}) {
 		},
 	}
 
+	if cfg.Exchange == "" {
+		return nil, nil, errors.New("Exchange parameter is required")
+	}
+
+	if cfg.DefaultRoutingKey == "" {
+		return nil, nil, errors.New("DefaultRoutingKey parameter is required")
+	}
+
 	if cfg.Logger == nil {
 		srv.log = log.InitLogger(cfg.DebugMode)
 	} else {
@@ -43,7 +51,7 @@ func NewServer(cfg *ServerConfig) (*Server, chan struct{}) {
 
 	srv.publisher.log = srv.log
 
-	if cfg.DefaultPublishSettings.Exchange == "" || cfg.DefaultPublishSettings.RoutingKey == "" {
+	if cfg.Exchange == "" || cfg.DefaultRoutingKey == "" {
 		srv.log.Info("You havn't passed default exchange or default routing key for publisher in config. " +
 			"This means that you need to fill exchange and routing key for every task manually via PublishCustom method or " +
 			"via exchange and routing key of task itself.")
@@ -115,15 +123,15 @@ func NewServer(cfg *ServerConfig) (*Server, chan struct{}) {
 	err := srv.publisher.init(srv.con.con)
 	if err != nil {
 		srv.log.Error(err)
-		return nil, nil
+		return nil, nil, err
 	}
 
-	if err = bootstrapExchanges(srv.publisher.ch, cfg.InitExchanges); err != nil {
+	if err = bootstrap(srv.publisher.ch, cfg.Exchange, cfg.InitQueues); err != nil {
 		srv.log.Error(err)
-		return nil, nil
+		return nil, nil, err
 	}
 
-	return srv, connectionBroken
+	return srv, connectionBroken, nil
 
 }
 

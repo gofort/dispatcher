@@ -6,8 +6,7 @@ package dispatcher
 type Task struct {
 	UUID       string                 `json:"uuid"`
 	Name       string                 `json:"name"`
-	RoutingKey string                 `json:"routing_key"`
-	Exchange   string                 `json:"exchange"`
+	RoutingKey string                 `json:"-"`
 	Args       []TaskArgument         `json:"args"`
 	Headers    map[string]interface{} `json:"headers"`
 }

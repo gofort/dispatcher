@@ -14,11 +14,9 @@ func Test_bootstrapExchanges1(t *testing.T) {
 	ch, _ := con.Channel()
 	defer ch.Close()
 
-	err := bootstrapExchanges(ch, []Exchange{
-		{"test_exchange_1", []Queue{
-			{"queue_1", []string{"key_1"}},
-		},
-		}})
+	err := bootstrap(ch, "test_exchange_1", []Queue{
+		{"queue_1", []string{"key_1"}},
+	})
 	if err != nil {
 		t.Error(err)
 		return
@@ -36,11 +34,9 @@ func Test_bootstrapExchanges2(t *testing.T) {
 	ch, _ := con.Channel()
 	defer ch.Close()
 
-	err := bootstrapExchanges(ch, []Exchange{
-		{"", []Queue{
-			{"queue_1", []string{"key_1"}},
-		},
-		}})
+	err := bootstrap(ch, "", []Queue{
+		{"queue_1", []string{"key_1"}},
+	})
 	if err == nil {
 		t.Error(errors.New("No error returned, but exchange was empty"))
 		return
@@ -58,11 +54,9 @@ func Test_bootstrapExchanges3(t *testing.T) {
 	ch, _ := con.Channel()
 	defer ch.Close()
 
-	err := bootstrapExchanges(ch, []Exchange{
-		{"test_exchange_1", []Queue{
-			{"", []string{"key_1"}},
-		},
-		}})
+	err := bootstrap(ch, "test_exchange_1", []Queue{
+		{"", []string{"key_1"}},
+	})
 	if err == nil {
 		t.Error(errors.New("No error returned, but queue was empty"))
 		return
@@ -80,11 +74,9 @@ func Test_bootstrapExchanges4(t *testing.T) {
 	ch, _ := con.Channel()
 	defer ch.Close()
 
-	err := bootstrapExchanges(ch, []Exchange{
-		{"test_exchange_1", []Queue{
-			{"queue_1", []string{""}},
-		},
-		}})
+	err := bootstrap(ch, "test_exchange_1", []Queue{
+		{"queue_1", []string{""}},
+	})
 	if err == nil {
 		t.Error(errors.New("No error returned, but binding key was empty"))
 		return

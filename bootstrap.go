@@ -5,43 +5,41 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func bootstrapExchanges(ch *amqp.Channel, exchanges []Exchange) error {
+func bootstrap(ch *amqp.Channel, exchange string, queues []Queue) error {
 
 	var err error
 
-	for _, e := range exchanges {
+	if exchange != "" {
+		err = declareExchange(ch, exchange)
+		if err != nil {
+			return err
+		}
+	}
 
-		if e.Name == "" {
-			return errors.New("Empty exchange name passed")
+	for _, q := range queues {
+
+		if q.Name == "" {
+			return errors.New("Empty queue name passed")
 		}
 
-		err = declareExchange(ch, e.Name)
+		err = declareQueue(ch, q.Name)
 		if err != nil {
 			return err
 		}
 
-		for _, q := range e.Queues {
+		for _, bk := range q.BindingKeys {
 
-			if q.Name == "" {
-				return errors.New("Empty queue name passed")
+			if bk == "" {
+				return errors.New("Empty binding key passed")
 			}
 
-			err = declareQueue(ch, q.Name)
+			if exchange == "" {
+				return errors.New("Can't bind key to queue without exchange")
+			}
+
+			err = queueBind(ch, exchange, q.Name, bk)
 			if err != nil {
 				return err
-			}
-
-			for _, bk := range q.BindingKeys {
-
-				if bk == "" {
-					return errors.New("Empty binding key passed")
-				}
-
-				err = queueBind(ch, e.Name, q.Name, bk)
-				if err != nil {
-					return err
-				}
-
 			}
 
 		}

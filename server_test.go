@@ -20,10 +20,16 @@ func TestNewServer(t *testing.T) {
 		TLSConfig:                   nil,
 		SecureConnection:            false,
 		DebugMode:                   true,
-		InitExchanges:               []Exchange{{serverTestExchange, []Queue{{serverTestQueue, []string{serverTestRoutingKey1, serverTestRoutingKey2}}}}},
+		Exchange:                    serverTestExchange,
+		DefaultRoutingKey:           "test_rk_1",
+		InitQueues:                  []Queue{{serverTestQueue, []string{serverTestRoutingKey1, serverTestRoutingKey2}}},
 	}
 
-	server, _ := NewServer(&cfg)
+	server, _, err := NewServer(&cfg)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	defer server.Close()
 
 	for {
@@ -58,9 +64,8 @@ func TestNewServer(t *testing.T) {
 		time.Sleep(time.Millisecond * 300)
 	}
 
-	_, err := server.NewWorker(&WorkerConfig{
+	_, err = server.NewWorker(&WorkerConfig{
 		Limit:       5,
-		Exchange:    serverTestExchange,
 		Queue:       serverTestQueue,
 		BindingKeys: []string{serverTestRoutingKey1},
 		Name:        "test_worker_1",
@@ -104,10 +109,16 @@ func Test_ServerReconnecting(t *testing.T) {
 		TLSConfig:                   nil,
 		SecureConnection:            false,
 		DebugMode:                   true,
-		InitExchanges:               []Exchange{{serverTestExchange, []Queue{{serverTestQueue, []string{serverTestRoutingKey1, serverTestRoutingKey2}}}}},
+		Exchange:                    serverTestExchange,
+		DefaultRoutingKey:           "test_rk_1",
+		InitQueues:                  []Queue{{serverTestQueue, []string{serverTestRoutingKey1, serverTestRoutingKey2}}},
 	}
 
-	server, _ := NewServer(&cfg)
+	server, _, err := NewServer(&cfg)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	defer server.Close()
 
 	for {
@@ -126,9 +137,25 @@ func Test_ServerReconnecting(t *testing.T) {
 		time.Sleep(time.Millisecond * 300)
 	}
 
-	_, err := server.NewWorker(&WorkerConfig{
-		Limit:       5,
-		Exchange:    serverTestExchange,
+	_, err = server.NewWorker(&WorkerConfig{
+		BindingKeys: []string{serverTestRoutingKey1},
+		Name:        "test_worker_1",
+	}, make(map[string]TaskConfig))
+	if err == nil {
+		t.Error(errors.New("No queue was passed in worker config, error expected"))
+		return
+	}
+
+	_, err = server.NewWorker(&WorkerConfig{
+		Queue:       serverTestQueue,
+		BindingKeys: []string{serverTestRoutingKey1},
+	}, make(map[string]TaskConfig))
+	if err == nil {
+		t.Error(errors.New("No name was passed in worker config, error expected"))
+		return
+	}
+
+	_, err = server.NewWorker(&WorkerConfig{
 		Queue:       serverTestQueue,
 		BindingKeys: []string{serverTestRoutingKey1},
 		Name:        "test_worker_1",
@@ -140,7 +167,6 @@ func Test_ServerReconnecting(t *testing.T) {
 
 	w2, err := server.NewWorker(&WorkerConfig{
 		Limit:       6,
-		Exchange:    serverTestExchange,
 		Queue:       serverTestQueue,
 		BindingKeys: []string{serverTestRoutingKey1},
 		Name:        "test_worker_2",

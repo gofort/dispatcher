@@ -109,7 +109,6 @@ func newWorkerTest1Task() (*Task, []byte) {
 		UUID:       uuid.NewV4().String(),
 		Name:       "test_task_1",
 		Args:       []TaskArgument{{"string", "test string"}, {"int", 1}},
-		Exchange:   workerTestExchange,
 		RoutingKey: workerTestRoutingKey,
 	}
 
@@ -129,7 +128,6 @@ func newWorkerTest2Task() (*Task, []byte) {
 			{"int", 1}, {"int8", 8}, {"int16", 16}, {"int32", 32}, {"int64", 64},
 			{"uint", 1}, {"uint8", 8}, {"uint16", 16}, {"uint32", 32}, {"uint64", 64},
 			{"float32", 0.32}, {"float64", 0.64}},
-		Exchange:   workerTestExchange,
 		RoutingKey: workerTestRoutingKey,
 	}
 
@@ -143,7 +141,6 @@ func newWorkerTest3Task() (*Task, []byte) {
 	t := Task{
 		UUID:       uuid.NewV4().String(),
 		Name:       "test_task_3",
-		Exchange:   workerTestExchange,
 		RoutingKey: workerTestRoutingKey,
 	}
 
@@ -178,7 +175,7 @@ func TestWorker(t *testing.T) {
 
 	task1, msg1 := newWorkerTest1Task()
 
-	if err = publishMessage(ch, task1.Exchange, task1.RoutingKey, task1.Headers, msg1); err != nil {
+	if err = publishMessage(ch, publisherTestExchange, task1.RoutingKey, task1.Headers, msg1); err != nil {
 		t.Error(err)
 		return
 	}
@@ -188,7 +185,7 @@ func TestWorker(t *testing.T) {
 
 	task2, msg2 := newWorkerTest2Task()
 
-	if err = publishMessage(ch, task2.Exchange, task2.RoutingKey, task2.Headers, msg2); err != nil {
+	if err = publishMessage(ch, publisherTestExchange, task2.RoutingKey, task2.Headers, msg2); err != nil {
 		t.Error(err)
 		return
 	}
@@ -198,7 +195,7 @@ func TestWorker(t *testing.T) {
 
 	task3, msg3 := newWorkerTest3Task()
 
-	if err = publishMessage(ch, task3.Exchange, task3.RoutingKey, task3.Headers, msg3); err != nil {
+	if err = publishMessage(ch, publisherTestExchange, task3.RoutingKey, task3.Headers, msg3); err != nil {
 		t.Error(err)
 		return
 	}

@@ -16,8 +16,6 @@ import (
 //
 // Limit - number of parallel tasks which will be executed.
 //
-// Exchange - name of exchange which worker will use.
-//
 // Queue - name of queue which worker will consume.
 //
 // Binding keys - biding keys for queue which will be created.
@@ -25,7 +23,6 @@ import (
 // Name - worker name
 type WorkerConfig struct {
 	Limit       int
-	Exchange    string // required
 	Queue       string // required
 	BindingKeys []string
 	Name        string // required
@@ -52,8 +49,8 @@ type Worker struct {
 	consumingStopped chan struct{}        // channel which notifies that consuming stopped
 	deliveries       <-chan amqp.Delivery // deliveries which worker is receiving
 	tasksInProgress  *sync.WaitGroup      // wait group for waiting all tasks finishing when we close this worker
-	queue            string               // queue name which will be subscribed by this worker
 
+	queue string // queue name which will be subscribed by this worker
 	name  string // worker name, also used as consumer tag
 	limit int    // number of tasks which can be executed in parallel
 
@@ -77,10 +74,6 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 
 	if cfg.Limit == 0 {
 		cfg.Limit = 3
-	}
-
-	if cfg.Exchange == "" {
-		return nil, errors.New("Worker exchange is required parameter")
 	}
 
 	if cfg.Queue == "" {
@@ -109,12 +102,6 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 	}
 	defer w.ch.Close()
 
-	err = declareExchange(w.ch, cfg.Exchange)
-	if err != nil {
-		s.log.Errorf("Error during declaring exchange: %v", err)
-		return nil, err
-	}
-
 	err = declareQueue(w.ch, cfg.Queue)
 	if err != nil {
 		s.log.Errorf("Error during declaring queue: %v", err)
@@ -123,7 +110,7 @@ func (s *Server) NewWorker(cfg *WorkerConfig, tasks map[string]TaskConfig) (*Wor
 
 	for _, k := range cfg.BindingKeys {
 
-		err = queueBind(w.ch, cfg.Exchange, cfg.Queue, k)
+		err = queueBind(w.ch, s.publisher.defaultExchange, cfg.Queue, k)
 		if err != nil {
 			s.log.Errorf("Error during binding queue: %v", err)
 			return nil, err
