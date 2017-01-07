@@ -3,6 +3,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/gofort/dispatcher)](https://goreportcard.com/report/github.com/gofort/dispatcher)
 [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/github.com/gofort/dispatcher)
 [![TravisCI](https://travis-ci.org/gofort/dispatcher.svg?branch=master)](https://travis-ci.org/gofort/dispatcher)
+[![codecov](https://codecov.io/gh/gofort/dispatcher/branch/master/graph/badge.svg)](https://codecov.io/gh/gofort/dispatcher)
 
 ### Overview
 
