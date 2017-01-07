@@ -75,6 +75,17 @@ func TestNewServer(t *testing.T) {
 		return
 	}
 
+	_, err = server.NewWorker(&WorkerConfig{
+		Limit:       5,
+		Queue:       serverTestQueue,
+		BindingKeys: []string{serverTestRoutingKey1},
+		Name:        "test_worker_1",
+	}, make(map[string]TaskConfig))
+	if err == nil {
+		t.Error(errors.New("Worker with the same name was successfully created - expected error"))
+		return
+	}
+
 	_, err = server.GetWorkerByName("test_worker_1")
 	if err != nil {
 		t.Error(err)
@@ -103,7 +114,7 @@ func TestNewServer(t *testing.T) {
 func Test_ServerReconnecting(t *testing.T) {
 
 	cfg := ServerConfig{
-		AMQPConnectionString:        "amqp://guest:guest@localhost:5672/",
+		AMQPConnectionString:        "",
 		ReconnectionRetries:         5,
 		ReconnectionIntervalSeconds: 5,
 		TLSConfig:                   nil,
@@ -120,6 +131,15 @@ func Test_ServerReconnecting(t *testing.T) {
 		return
 	}
 	defer server.Close()
+
+	_, err = server.NewWorker(&WorkerConfig{
+		BindingKeys: []string{serverTestRoutingKey1},
+		Name:        "test_worker_1",
+	}, make(map[string]TaskConfig))
+	if err == nil {
+		t.Error(errors.New("Connection should not be created yet - error expected"))
+		return
+	}
 
 	for {
 		if server.con.connected {
@@ -184,7 +204,7 @@ func Test_ServerReconnecting(t *testing.T) {
 	time.Sleep(time.Second * 2)
 
 	server.con.con.Close()
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second * 4)
 
 	for {
 		if server.con.connected {
