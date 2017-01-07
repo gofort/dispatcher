@@ -2,8 +2,8 @@ package dispatcher
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/gofort/dispatcher/log"
-	"github.com/satori/go.uuid"
 	"github.com/streadway/amqp"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -59,7 +59,6 @@ func destroyPublisherTestEnv(con *amqp.Connection, p *publisher) {
 
 func newPublisherTestTask() *Task {
 	return &Task{
-		UUID: uuid.NewV4().String(),
 		Name: "test_task_1",
 		Args: []TaskArgument{{"string", "test string"}, {"int", 1}},
 	}
@@ -118,5 +117,32 @@ func TestPublisher_Publish(t *testing.T) {
 	}
 
 	t.Error("Sended task and received task are not equal")
+
+}
+
+func TestPublisher_Publish2(t *testing.T) {
+
+	con, p, err := createPublisherTestEnv()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer destroyPublisherTestEnv(con, p)
+
+	p.defaultExchange = publisherTestExchange
+	p.defaultRoutingKey = publisherTestRoutingKey
+
+	if err = p.init(con); err != nil {
+		t.Error(err)
+		return
+	}
+
+	task := newPublisherTestTask()
+	task.Name = ""
+
+	if err = p.Publish(task); err == nil {
+		t.Error(errors.New("Task had no name - error expected"))
+		return
+	}
 
 }

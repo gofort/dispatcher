@@ -79,7 +79,7 @@ func newWorkerTestTaskConfigs(test1, test2, test3 chan struct{}) map[string]Task
 	}
 
 	t["test_task_2"] = TaskConfig{
-		TimeoutSeconds: 30,
+		TimeoutSeconds: 0,
 		Function: func(
 			tbool bool,
 			tstring string,
@@ -149,6 +149,19 @@ func newWorkerTest3Task() (*Task, []byte) {
 	return &t, msg
 }
 
+func newWorkerTest4Task() (*Task, []byte) {
+
+	t := Task{
+		UUID:       uuid.NewV4().String(),
+		Name:       "test_task_4",
+		RoutingKey: workerTestRoutingKey,
+	}
+
+	msg, _ := json.Marshal(t)
+
+	return &t, msg
+}
+
 func TestWorker(t *testing.T) {
 
 	test1 := make(chan struct{})
@@ -191,7 +204,7 @@ func TestWorker(t *testing.T) {
 	}
 
 	<-test2
-	t.Log("Task 2 with all types of arguments passed!")
+	t.Log("Task 2 with all types of arguments and zero timeout passed!")
 
 	task3, msg3 := newWorkerTest3Task()
 
@@ -208,6 +221,20 @@ func TestWorker(t *testing.T) {
 	case <-timer.C:
 		t.Log("Task 3 without arguments and with timeout passed!")
 	}
+
+	if err = publishMessage(ch, publisherTestExchange, task3.RoutingKey, task3.Headers, []byte("msg")); err != nil {
+		t.Error(err)
+		return
+	}
+
+	task4, msg4 := newWorkerTest4Task()
+
+	if err = publishMessage(ch, publisherTestExchange, task4.RoutingKey, task4.Headers, msg4); err != nil {
+		t.Error(err)
+		return
+	}
+
+	w.Close()
 
 	w.Close()
 
