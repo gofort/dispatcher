@@ -8,7 +8,7 @@ type Task struct {
 	Name       string                 `json:"name"`
 	RoutingKey string                 `json:"-"`
 	Args       []TaskArgument         `json:"args"`
-	Headers    map[string]interface{} `json:"headers"`
+	Headers    map[string]interface{} `json:"-"`
 }
 
 // TaskArgument is an argument which will be passed to function.

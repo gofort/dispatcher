@@ -66,7 +66,7 @@ go get github.com/gofort/dispatcher
 
 ### Before reading description
 
-This library is created around AMQP protocol and this is why I advice to read [RabbitMQ tutorial](http://www.rabbitmq.com/getstarted.html), because a lot of strange words are described there.
+This library is created around AMQP protocol and this is why I advice to read [RabbitMQ tutorial](http://www.rabbitmq.com/getstarted.html), because a lot of stuff are covered there.
 If you don't know what is queue or routing key it is a must.
 
 ### Server
@@ -129,7 +129,7 @@ type Task struct {
 	Name       string                 `json:"name"`
 	RoutingKey string                 `json:"-"`
 	Args       []TaskArgument         `json:"args"`
-	Headers    map[string]interface{} `json:"headers"`
+	Headers    map[string]interface{} `json:"-"`
 }
 type TaskArgument struct {
 	Type  string      `json:"type"`
@@ -298,4 +298,4 @@ $ go test -v
 ```
 
 ### Special thanks
-1. [Richard Knop](https://github.com/RichardKnop) for his Machinery project which was an example for this project.
+1. [Richard Knop](https://github.com/RichardKnop) for his Machinery project which was an example for this project and a bit of code was taken from there.
