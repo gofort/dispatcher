@@ -6,6 +6,7 @@ import (
 	"github.com/gofort/dispatcher/log"
 	"github.com/streadway/amqp"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
@@ -19,7 +20,7 @@ func createPublisherTestEnv() (*amqp.Connection, *publisher, error) {
 		log: log.InitLogger(true),
 	}
 
-	con, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	con, err := amqp.Dial(os.Getenv("DISPATCHER_AMQP_CON"))
 	if err != nil {
 		return nil, nil, err
 	}

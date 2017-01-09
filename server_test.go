@@ -2,6 +2,7 @@ package dispatcher
 
 import (
 	"errors"
+	"os"
 	"testing"
 	"time"
 )
@@ -14,7 +15,7 @@ const serverTestRoutingKey2 = "test_rk_2"
 func TestNewServer(t *testing.T) {
 
 	cfg := ServerConfig{
-		AMQPConnectionString:        "amqp://guest:guest@localhost:5672/",
+		AMQPConnectionString:        os.Getenv("DISPATCHER_AMQP_CON"),
 		ReconnectionRetries:         5,
 		ReconnectionIntervalSeconds: 5,
 		TLSConfig:                   nil,
@@ -114,7 +115,7 @@ func TestNewServer(t *testing.T) {
 func Test_ServerReconnecting(t *testing.T) {
 
 	cfg := ServerConfig{
-		AMQPConnectionString:        "",
+		AMQPConnectionString:        os.Getenv("DISPATCHER_AMQP_CON"),
 		ReconnectionRetries:         5,
 		ReconnectionIntervalSeconds: 5,
 		TLSConfig:                   nil,

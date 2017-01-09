@@ -291,7 +291,7 @@ $ godep save
 
 **Testing:**
 
-For testing you should have RabbitMQ locally (amqp://guest:guest@localhost:5672/).
+For testing you should have set environment variable DISPATCHER_AMQP_CON which is equal to AMQP connection string, example: amqp://guest:guest@localhost:5672/
 
 ```bash
 $ go test -v

@@ -5,6 +5,7 @@ import (
 	"github.com/gofort/dispatcher/log"
 	"github.com/satori/go.uuid"
 	"github.com/streadway/amqp"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -27,7 +28,7 @@ func createWorkerTestEnv(test1, test2, test3 chan struct{}) (*amqp.Connection, *
 		tasksInProgress: new(sync.WaitGroup),
 	}
 
-	con, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	con, err := amqp.Dial(os.Getenv("DISPATCHER_AMQP_CON"))
 	if err != nil {
 		return nil, nil, err
 	}

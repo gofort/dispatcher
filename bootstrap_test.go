@@ -3,12 +3,13 @@ package dispatcher
 import (
 	"errors"
 	"github.com/streadway/amqp"
+	"os"
 	"testing"
 )
 
 func Test_bootstrapExchanges1(t *testing.T) {
 
-	con, _ := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	con, _ := amqp.Dial(os.Getenv("DISPATCHER_AMQP_CON"))
 	defer con.Close()
 
 	ch, _ := con.Channel()
@@ -28,7 +29,7 @@ func Test_bootstrapExchanges1(t *testing.T) {
 
 func Test_bootstrapExchanges2(t *testing.T) {
 
-	con, _ := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	con, _ := amqp.Dial(os.Getenv("DISPATCHER_AMQP_CON"))
 	defer con.Close()
 
 	ch, _ := con.Channel()
@@ -48,7 +49,7 @@ func Test_bootstrapExchanges2(t *testing.T) {
 
 func Test_bootstrapExchanges3(t *testing.T) {
 
-	con, _ := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	con, _ := amqp.Dial(os.Getenv("DISPATCHER_AMQP_CON"))
 	defer con.Close()
 
 	ch, _ := con.Channel()
@@ -68,7 +69,7 @@ func Test_bootstrapExchanges3(t *testing.T) {
 
 func Test_bootstrapExchanges4(t *testing.T) {
 
-	con, _ := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	con, _ := amqp.Dial(os.Getenv("DISPATCHER_AMQP_CON"))
 	defer con.Close()
 
 	ch, _ := con.Channel()
