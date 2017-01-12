@@ -317,7 +317,7 @@ func reflectArgs(args []TaskArgument) ([]reflect.Value, error) {
 	return argValues, nil
 }
 
-func tryCall(f reflect.Value, args []reflect.Value, timeoutSeconds int64) bool {
+func tryCall(f reflect.Value, args []reflect.Value, timeoutSeconds int64) (finishedByTimeout bool) {
 
 	defer func() {
 		if e := recover(); e != nil {
