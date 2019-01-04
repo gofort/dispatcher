@@ -2,9 +2,10 @@ package dispatcher
 
 import (
 	"crypto/tls"
-	"github.com/streadway/amqp"
 	"strings"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
 type amqpConnection struct {
@@ -24,7 +25,7 @@ func (s *amqpConnection) initConnection(log Log, cfg *ServerConfig, notifyConnec
 
 	for {
 
-		if counter == cfg.ReconnectionRetries+1 {
+		if counter == cfg.ReconnectionRetries+1 && ! cfg.ReconnectionRetriesForever {
 			startGlobalShutoff <- struct{}{}
 			<-s.workersFinished
 			connectionBroken <- struct{}{}

@@ -22,6 +22,7 @@ import "crypto/tls"
 // Logger - custom logger if you don't want to use dispatcher's default logrus.
 type ServerConfig struct {
 	AMQPConnectionString        string
+	ReconnectionRetriesForever  bool
 	ReconnectionRetries         int
 	ReconnectionIntervalSeconds int64
 	TLSConfig                   *tls.Config
